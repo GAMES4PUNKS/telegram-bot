@@ -35,9 +35,9 @@ async def main():
 
 # This part is to ensure that the bot starts properly
 if __name__ == "__main__":
-    # Directly run the async main function using the application lifecycle manager
+    # Directly call the async main function without using asyncio.run() (Heroku handles the event loop)
     import asyncio
-    asyncio.run(main())
+    asyncio.ensure_future(main())
 
 
 
