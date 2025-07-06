@@ -23,19 +23,22 @@ async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Main function to run the bot
 async def main():
-    # Build the bot application
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    try:
+        # Build the bot application
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Add command handler
-    application.add_handler(CommandHandler("lfg", lfg))
+        # Add command handler
+        application.add_handler(CommandHandler("lfg", lfg))
 
-    logger.info("Bot is running and listening for commands...")
-    # This will internally handle the event loop and polling
-    await application.run_polling()
+        logger.info("Bot is running and listening for commands...")
+
+        # This will internally handle the event loop and polling
+        await application.run_polling()
+    except Exception as e:
+        logger.error(f"Error occurred: {e}")
 
 # This part is to ensure that the bot starts properly
 if __name__ == "__main__":
-    # Directly call the async main function without using asyncio.run() (Heroku handles the event loop)
     import asyncio
     asyncio.ensure_future(main())
 
