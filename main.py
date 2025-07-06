@@ -141,12 +141,9 @@ async def main():
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
     print("✅ Bot is running and listening for all commands...")
-    await app.run_polling()  # Updated: Removed 'port=PORT'
+    await app.run_polling()  # Fixed by removing 'port=PORT'
 
 import asyncio
 asyncio.run(main())
 
-
-import asyncio
-asyncio.run(main())
 
