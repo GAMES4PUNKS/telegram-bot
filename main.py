@@ -31,10 +31,10 @@ async def main():
     logger.info("Bot is running and listening for commands...")
     await application.run_polling()
 
-# This is the correct entry point to run the bot in an async context on Heroku
+# This will let the Telegram bot framework handle the event loop internally.
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())  # Use asyncio.run to start the bot in a compatible way
+    main()  # Simply call main(), no need to use asyncio.run()
+
 
 
 
