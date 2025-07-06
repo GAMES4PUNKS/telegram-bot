@@ -42,9 +42,14 @@ async def snakerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("▶️ Play SnakeRun", url=GAME_URL)]]
         )
-        await update.message.reply_text("🎮 Click below to play SnakeRun:", reply_markup=keyboard)
+        try:
+            await update.message.reply_text("🎮 Click below to play SnakeRun:", reply_markup=keyboard)
+        except Exception as e:
+            # Log error if unable to send reply
+            logging.error(f"Error sending reply: {e}")
     else:
         # Fallback if message is missing
+        logging.warning("No message found to reply to.")
         await update.effective_chat.send_message("🎮 Something went wrong. Try again later!")
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -148,6 +153,7 @@ async def main():
 
 import asyncio
 asyncio.run(main())
+
 
 
 
