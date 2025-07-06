@@ -4,13 +4,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import nest_asyncio
 
-# Fix event loop issue for Replit/Heroku
+# Fix event loop issue for Replit
 nest_asyncio.apply()
 
 # Fetch Bot Token from environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GAME_URL = "https://t.me/GAMES4PUNKSBOT?game=SPACERUN3008"  # Game URL for SPACERUN3008
-GAME_NAME = "SPACERUN3008"  # Game Short Name
+GAME_URL = "https://t.me/GAMES4PUNKSBOT?game=SPACERUN3008"
+GAME_NAME = "SPACERUN3008"
 GAME_TITLE = "SPACERUN3008"
 GAME_DESCRIPTION = "🎮 Play SPACERUN3008 and win WAX NFTs!"
 OWNER_CHAT_ID = 1019741898  # Your Telegram user ID
@@ -116,8 +116,6 @@ async def detect_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Main ---
 async def main():
-    PORT = os.environ.get('PORT', 5000)  # Default to 5000 if no PORT environment variable is set
-
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Add commands handlers
@@ -146,3 +144,4 @@ async def main():
 
 import asyncio
 asyncio.run(main())
+
