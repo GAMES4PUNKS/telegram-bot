@@ -34,14 +34,13 @@ async def main():
 
         # This will internally handle the event loop and polling
         await application.run_polling()
+
     except Exception as e:
         logger.error(f"Error occurred: {e}")
 
 if __name__ == "__main__":
-    # Use the existing event loop, do not start a new one.
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    # Run the bot directly without asyncio management
+    main()
 
 
 
