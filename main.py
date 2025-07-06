@@ -3,7 +3,7 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Replace with your bot's token
+# Fetch Bot Token from Heroku environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Logging setup
@@ -23,6 +23,7 @@ async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Main function to run the bot
 async def main():
+    # Build the bot application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Add command handler
@@ -31,9 +32,11 @@ async def main():
     logger.info("Bot is running and listening for commands...")
     await application.run_polling()
 
-# This will let the Telegram bot framework handle the event loop internally.
+# This part is to ensure that the bot starts properly in Heroku's environment
 if __name__ == "__main__":
-    main()  # Simply call main(), no need to use asyncio.run()
+    import asyncio
+    asyncio.run(main())  # Ensure the bot starts correctly by running the async main function
+
 
 
 
