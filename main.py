@@ -30,12 +30,15 @@ async def main():
     application.add_handler(CommandHandler("lfg", lfg))
 
     logger.info("Bot is running and listening for commands...")
+    # This will internally handle the event loop and polling
     await application.run_polling()
 
-# This part is to ensure that the bot starts properly in Heroku's environment
+# This part is to ensure that the bot starts properly
 if __name__ == "__main__":
+    # Directly run the async main function using the application lifecycle manager
     import asyncio
-    asyncio.run(main())  # Ensure the bot starts correctly by running the async main function
+    asyncio.run(main())
+
 
 
 
