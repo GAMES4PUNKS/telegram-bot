@@ -33,9 +33,9 @@ async def main():
 
 # This will allow the bot to run on Heroku without closing the event loop
 if __name__ == "__main__":
-    import asyncio
-    # Run the event loop directly, as Heroku already runs an event loop
-    asyncio.get_event_loop().run_until_complete(main())
+    # Simply run the main function with await; no need to manually handle the event loop
+    main()
+
 
 
 
