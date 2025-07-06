@@ -3,6 +3,7 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import nest_asyncio
+import socket
 
 # Fix event loop issue for Replit
 nest_asyncio.apply()
@@ -140,7 +141,11 @@ async def main():
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
     print("✅ Bot is running and listening for all commands...")
-    await app.run_polling()
+    await app.run_polling()  # Updated: Removed 'port=PORT'
+
+import asyncio
+asyncio.run(main())
+
 
 import asyncio
 asyncio.run(main())
