@@ -3,7 +3,7 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Fetch Bot Token from Heroku environment variables
+# Fetch Bot Token from environment
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Logging setup
@@ -38,10 +38,13 @@ async def main():
     except Exception as e:
         logger.error(f"Error occurred: {e}")
 
+# Ensure the bot starts here
 if __name__ == "__main__":
-    import asyncio
-    # This will ensure that the bot starts correctly in the Heroku environment
-    asyncio.run(main())
+    # Directly call the polling method (no asyncio.run)
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("lfg", lfg))
+    application.run_polling()
+
 
 
 
