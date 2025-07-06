@@ -38,9 +38,10 @@ async def main():
         logger.error(f"Error occurred: {e}")
 
 if __name__ == "__main__":
-    # Avoid using asyncio.run() when already inside an async environment
+    # Use the existing event loop, do not start a new one.
     import asyncio
-    asyncio.get_event_loop().run_until_complete(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
 
 
 
