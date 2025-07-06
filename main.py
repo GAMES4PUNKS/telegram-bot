@@ -39,10 +39,9 @@ async def main():
         logger.error(f"Error occurred: {e}")
 
 if __name__ == "__main__":
-    # Run the bot directly without asyncio management
-    main()
-
-
+    import asyncio
+    # This will ensure that the bot starts correctly in the Heroku environment
+    asyncio.run(main())
 
 
 
