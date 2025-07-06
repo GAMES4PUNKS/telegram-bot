@@ -1,13 +1,13 @@
-import logging
 import os
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import nest_asyncio
 
-# Fix event loop issue for Replit
+# Fix event loop issue for Replit/Heroku
 nest_asyncio.apply()
 
-# Fetch Bot Token from Replit Secrets
+# Fetch Bot Token from environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GAME_URL = "https://t.me/GAMES4PUNKSBOT?game=SPACERUN3008"  # Game URL for SPACERUN3008
 GAME_NAME = "SPACERUN3008"  # Game Short Name
@@ -116,6 +116,8 @@ async def detect_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Main ---
 async def main():
+    PORT = os.environ.get('PORT', 5000)  # Default to 5000 if no PORT environment variable is set
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Add commands handlers
@@ -140,7 +142,8 @@ async def main():
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
     print("✅ Bot is running and listening for all commands...")
-    await app.run_polling()
+    await app.run_polling(port=PORT)
 
 import asyncio
 asyncio.run(main())
+
