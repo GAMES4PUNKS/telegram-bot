@@ -31,10 +31,10 @@ async def main():
     logger.info("Bot is running and listening for commands...")
     await application.run_polling()
 
-# This will allow the bot to run on Heroku without closing the event loop
+# This is the correct entry point to run the bot in an async context on Heroku
 if __name__ == "__main__":
-    # Simply run the main function with await; no need to manually handle the event loop
-    main()
+    import asyncio
+    asyncio.run(main())  # Use asyncio.run to start the bot in a compatible way
 
 
 
