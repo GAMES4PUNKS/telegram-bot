@@ -3,6 +3,8 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import nest_asyncio
+import sys
+import signal
 
 # Fix event loop issue for Replit
 nest_asyncio.apply()
@@ -35,20 +37,18 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def snakerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
-        await context.bot.send_game(
-            chat_id=update.effective_chat.id,
-            game_short_name=GAME_NAME,
-        )
-        keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("▶️ Play SnakeRun", url=GAME_URL)]]
-        )
         try:
+            await context.bot.send_game(
+                chat_id=update.effective_chat.id,
+                game_short_name=GAME_NAME,
+            )
+            keyboard = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("▶️ Play SnakeRun", url=GAME_URL)]]
+            )
             await update.message.reply_text("🎮 Click below to play SnakeRun:", reply_markup=keyboard)
         except Exception as e:
-            # Log error if unable to send reply
             logging.error(f"Error sending reply: {e}")
     else:
-        # Fallback if message is missing
         logging.warning("No message found to reply to.")
         await update.effective_chat.send_message("🎮 Something went wrong. Try again later!")
 
@@ -148,11 +148,14 @@ async def main():
     # New Member Welcome
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
-    print("✅ Bot is running and listening for all commands...")
-    await app.run_polling()
+    # Start the bot on Heroku with the correct PORT
+    port = int(os.environ.get("PORT", 8443))  # Default to 8443
+    print(f"Starting bot on port {port}...")
+    await app.run_polling(drop_pending_updates=True, port=port)
 
 import asyncio
 asyncio.run(main())
+
 
 
 
