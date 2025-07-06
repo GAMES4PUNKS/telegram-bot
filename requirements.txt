@@ -1,2 +1,5 @@
-pip freeze > requirements.txt
+python-telegram-bot==20.0
+nest-asyncio==1.5.4
+httpx==0.23.3
+
 
