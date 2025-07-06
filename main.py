@@ -37,10 +37,12 @@ async def main():
     except Exception as e:
         logger.error(f"Error occurred: {e}")
 
-# This part is to ensure that the bot starts properly
 if __name__ == "__main__":
+    # Avoid using asyncio.run() when already inside an async environment
     import asyncio
-    asyncio.ensure_future(main())
+    asyncio.get_event_loop().run_until_complete(main())
+
+
 
 
 
