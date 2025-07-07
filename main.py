@@ -34,14 +34,13 @@ logging.basicConfig(
 
 # 🎮 Game launch command
 async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_game(
-        chat_id=update.effective_chat.id,
-        game_short_name=GAME_NAME,
-    )
+    # Send the game start link with a button
     keyboard = InlineKeyboardMarkup(
         [[InlineKeyboardButton("▶️ Play SPACERUN3008", url=GAME_URL)]]
     )
-    await update.message.reply_text("🎮 Click below to play SPACERUN3008:", reply_markup=keyboard)
+    await update.message.reply_text(
+        "🎮 Click below to play SPACERUN3008:", reply_markup=keyboard
+    )
 
 # ✅ Game status
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
