@@ -1,5 +1,6 @@
 import logging
 import os
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import nest_asyncio
@@ -31,6 +32,16 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+
+# --- Function to delete webhook to avoid conflicts with polling ---
+def delete_webhook():
+    bot_token = os.getenv("BOT_TOKEN")  # Or hardcode your bot token here
+    url = f"https://api.telegram.org/bot{bot_token}/deleteWebhook"
+    response = requests.get(url)
+    print(response.json())  # Should return {'ok': True}
+
+# Delete webhook before running the bot
+delete_webhook()
 
 # 🎮 Game launch command
 async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
