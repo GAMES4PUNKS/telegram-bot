@@ -9,7 +9,7 @@ nest_asyncio.apply()
 
 # Fetch Bot Token from environment variables (Railway environment variables will be used)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GAME_URL = "https://2f919dd6-e8d3-4f1b-9deb-fbb8829f05e7-00-19avjtr2u61p5.kirk.replit.dev/"
+GAME_URL = "https://games4punks.github.io/spacerun3008/"  # Correct URL to the hosted game
 GAME_NAME = "spacerun3008"
 GAME_TITLE = "Spacerun3008"
 GAME_DESCRIPTION = "🎮 Listen & Play to Earn with GK Radio and win WAX NFTs!"
@@ -144,6 +144,7 @@ async def main():
 
 import asyncio
 asyncio.run(main())
+
 
 
 
