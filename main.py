@@ -25,11 +25,6 @@ logging.basicConfig(
 )
 
 # 🎮 Game Command
-async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🎮 Use /spacerun to play\n📊 /leaderboard for scores\n❓ /about to learn more about the game and the bot."
-    )
-
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Learn more about the games and bot.")
 
@@ -119,7 +114,6 @@ async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Add commands handlers
-    app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CommandHandler("about", about))
     app.add_handler(CommandHandler("spacerun", spacerun))
     app.add_handler(CommandHandler("leaderboard", leaderboard))
@@ -144,6 +138,7 @@ async def main():
 
 import asyncio
 asyncio.run(main())
+
 
 
 
