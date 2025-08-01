@@ -1,39 +1,157 @@
-import logging
 import os
+import random
 import sqlite3
 import aiohttp
-import nest_asyncio
-import asyncio
-
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-import uvicorn
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 
-# Apply fix for nested event loops
-nest_asyncio.apply()
-
-# ENV vars
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GAME_KEY_TEMPLATE_ID = "895159"
-ATOMIC_API = "https://wax.api.atomicassets.io/atomicassets/v1/assets"
-GAME_URL_EMOJI = "https://games4punks.github.io/emojisinvade/"
-GAME_URL_SPACERUN = "https://games4punks.github.io/spacerun3008/"
+OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID", "1019741898"))
 
-OWNER_CHAT_ID = 1019741898
+EMOJIS_GAME_URL = "https://games4punks.github.io/emojisinvade/"
+SPACERUN_GAME_URL = "https://games4punks.github.io/spacerun3008/"
+GAME_KEY_TEMPLATE = "895159"
+ATOMIC_TEMPLATE_URL = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?collection_name=games4punks1&template_id={GAME_KEY_TEMPLATE}&owner="
 
-# DB setup
-db = sqlite3.connect("gkbot.db", check_same_thread=False)
-cur = db.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, wallet TEXT, verified INTEGER DEFAULT 0, plays INTEGER DEFAULT 0)")
-db.commit()
+# Initialize DB
+conn = sqlite3.connect("gkbot.db", check_same_thread=False)
+cur = conn.cursor()
+cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        telegram_id INTEGER PRIMARY KEY,
+        wallet TEXT,
+        plays INTEGER DEFAULT 0,
+        verified INTEGER DEFAULT 0
+    )
+""")
+conn.commit()
 
-# Logging
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+# Captcha sessions
+captcha_sessions = {}
 
-# Wallet handlers
+# Utils
+def set_wallet(user_id, wallet):
+    cur.execute("INSERT OR REPLACE INTO users (telegram_id, wallet) VALUES (?, ?)", (user_id, wallet))
+    conn.commit()
+
+def get_wallet(user_id):
+    cur.execute("SELECT wallet FROM users WHERE telegram_id = ?", (user_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+def remove_wallet(user_id):
+    cur.execute("DELETE FROM users WHERE telegram_id = ?", (user_id,))
+    conn.commit()
+
+def has_game_key_nft(wallet):
+    async def fetch():
+        async with aiohttp.ClientSession() as session:
+            async with session.get(ATOMIC_TEMPLATE_URL + wallet) as resp:
+                data = await resp.json()
+                return len(data.get("data", [])) > 0
+    return fetch()
+
+# Commands
+async def link_ewallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    a, b = random.randint(1, 9), random.randint(1, 9)
+    captcha_sessions[user_id] = a + b
+    await update.message.reply_text(f"🤖 CAPTCHA Check: What is {a} + {b}?")
+
+async def handle_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+
+    # CAPTCHA check
+    if user_id in captcha_sessions:
+        try:
+            if int(text) == captcha_sessions[user_id]:
+                del captcha_sessions[user_id]
+                await update.message.reply_text("✅ Human verified. Now send your WAX wallet address:")
+            else:
+                await update.message.reply_text("❌ CAPTCHA failed. Try /linkEwallet again.")
+            return
+        except:
+            await update.message.reply_text("❌ Please enter a number.")
+            return
+
+    if len(text) == 42 and text.endswith(".wam"):
+        set_wallet(user_id, text)
+        await update.message.reply_text(f"✅ WAX wallet linked: `{text}`", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("❌ Invalid WAX wallet. Try again.")
+
+async def unlink_ewallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    remove_wallet(user_id)
+    await update.message.reply_text("🚫 Wallet unlinked.")
+
+async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    wallet = get_wallet(user_id)
+    if not wallet:
+        await update.message.reply_text("❌ You need to /linkEwallet first.")
+        return
+    has_nft = await has_game_key_nft(wallet)
+    if has_nft:
+        await update.message.reply_text("✅ Game Key NFT verified! You may now /plaE or /spacerun.")
+    else:
+        await update.message.reply_text(
+            "❌ No valid Game Key NFT found.\n"
+            "🔑 *You need the GK3008 Game Key NFT to play.*\n"
+            "[Buy one here](https://neftyblocks.com/collection/games4punks1/drops/236466)",
+            parse_mode="Markdown", disable_web_page_preview=True
+        )
+
+async def play_emojis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    wallet = get_wallet(user_id)
+    if not wallet:
+        await update.message.reply_text("❌ You need to /linkEwallet first.")
+        return
+    has_nft = await has_game_key_nft(wallet)
+    if has_nft:
+        button = InlineKeyboardButton("▶️ Play Emojis Invade", url=EMOJIS_GAME_URL)
+        await update.message.reply_text("🎮 Click to play Emojis Invade:", reply_markup=InlineKeyboardMarkup([[button]]))
+    else:
+        await update.message.reply_text("❌ Access denied. NFT not found. Use /verifyEkey.")
+
+async def play_spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    wallet = get_wallet(user_id)
+    if not wallet:
+        await update.message.reply_text("❌ You need to /linkEwallet first.")
+        return
+    has_nft = await has_game_key_nft(wallet)
+    if has_nft:
+        button = InlineKeyboardButton("▶️ Play Spacerun3008", url=SPACERUN_GAME_URL)
+        await update.message.reply_text("🎮 Click to play Spacerun3008:", reply_markup=InlineKeyboardMarkup([[button]]))
+    else:
+        await update.message.reply_text("❌ Access denied. NFT not found. Use /verifyEkey.")
+
+# Launch
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("linkEwallet", link_ewallet))
+    app.add_handler(CommandHandler("unlinkEwallet", unlink_ewallet))
+    app.add_handler(CommandHandler("verifyEkey", verify_ekey))
+    app.add_handler(CommandHandler("plaE", play_emojis))
+    app.add_handler(CommandHandler("spacerun", play_spacerun))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_wallet))
+
+    print("✅ GK3008 Bot is live...")
+    await app.run_polling()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
 def set_wallet(user_id, wallet):
     cur.execute("INSERT OR REPLACE INTO users (user_id, wallet) VALUES (?, ?)", (user_id, wallet))
     db.commit()
