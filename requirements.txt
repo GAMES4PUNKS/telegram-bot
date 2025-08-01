@@ -1,0 +1,1 @@
+python-telegram-bot==20.0a2\nnest-asyncio==1.5.4\nfastapi\nuvicorn\naiohttp\n
