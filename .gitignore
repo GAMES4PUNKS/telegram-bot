@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# SQLite (optional – include if your DB is only for local dev)
+*.sqlite3
+*.db
+
+# VSCode/IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
