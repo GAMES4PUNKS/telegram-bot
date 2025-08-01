@@ -1,25 +1,32 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-*.egg
-*.egg-info/
-dist/
-build/
+*$py.class
 
-# Environment
+# Environment files
 .env
+.env.*
 
-# OS junk
+# SQLite databases and logs
+*.db
+*.sqlite3
+*.log
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# OS-generated files
 .DS_Store
 Thumbs.db
 
-# SQLite (optional – include if your DB is only for local dev)
-*.sqlite3
-*.db
+# Python-specific
+.python-version
 
-# VSCode/IDE
+# VSCode
 .vscode/
-.idea/
 
-# Logs
-*.log
+# Railway & deployment cache
+railway.json
+
