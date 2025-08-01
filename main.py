@@ -6,29 +6,32 @@ import aiohttp
 from fastapi import FastAPI
 from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 )
 import nest_asyncio
 import asyncio
 
-# --- Setup ---
+# Apply async patch
 nest_asyncio.apply()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+# Environment
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 REQUIRED_TEMPLATE_ID = "895159"
 GAME_KEY_DROP_URL = "https://neftyblocks.com/collection/games4punks1/drops/236466"
 EMOJIS_INVADE_URL = "https://games4punks.github.io/emojisinvade/"
 SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
 
-logging.basicConfig(level=logging.INFO)
-
+# FastAPI
 api = FastAPI()
 pending_challenges = {}
+
+logging.basicConfig(level=logging.INFO)
 
 # --- CAPTCHA ---
 async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    a, b = random.randint(1, 10), random.randint(1, 10)
+    a = random.randint(1, 10)
+    b = random.randint(1, 10)
     pending_challenges[user_id] = a + b
     await update.message.reply_text(f"🧠 Solve this: What is {a} + {b}?")
 
@@ -40,113 +43,86 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 del pending_challenges[user_id]
                 await update.message.reply_text("✅ Verified! Use /plaE or /spacerun to begin.")
             else:
-                await update.message.reply_text("❌ Wrong answer. Try again.")
+                await update.message.reply_text("❌ Incorrect. Try again.")
         except:
-            await update.message.reply_text("❌ Enter a number.")
-    else:
-        await update.message.reply_text("❌ Use /lfg to verify first.")
+            await update.message.reply_text("❌ Please enter a number.")
 
-# --- Wallet Linking ---
+# --- Wallet ---
 async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Usage: /linkEwallet yourwaxwallet")
         return
-    wallet = context.args[0]
     user_id = update.effective_user.id
+    wallet = context.args[0]
     async with aiosqlite.connect("botdata.db") as db:
         await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
         await db.execute("INSERT OR REPLACE INTO linked_wallets (telegram_id, wallet) VALUES (?, ?)", (user_id, wallet))
         await db.commit()
     await update.message.reply_text(f"🔗 WAX wallet {wallet} linked!")
 
-async def unlink_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    async with aiosqlite.connect("botdata.db") as db:
-        await db.execute("DELETE FROM linked_wallets WHERE telegram_id = ?", (user_id,))
-        await db.commit()
-    await update.message.reply_text("❌ Wallet unlinked.")
-
-# --- NFT Check ---
+# --- Verification ---
 async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
-            result = await cursor.fetchone()
-    if not result:
+            row = await cursor.fetchone()
+    if not row:
         await update.message.reply_text("❌ No wallet linked. Use /linkEwallet first.")
         return
-    wallet = result[0]
+    wallet = row[0]
     url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&template_id={REQUIRED_TEMPLATE_ID}&collection_name=games4punks1"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
             data = await resp.json()
     if data["data"]:
-        await update.message.reply_text("✅ You own the required GK3008 Game Key NFT!")
+        await update.message.reply_text("✅ You own the GK3008 Game Key NFT!")
     else:
-        await update.message.reply_text(f"🚫 You need the NFT to play. Buy here:\n{GAME_KEY_DROP_URL}")
+        await update.message.reply_text(f"🚫 You need the NFT:\n{GAME_KEY_DROP_URL}")
 
-# --- Game Launch ---
+# --- Game Commands ---
 async def plaE(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await launch_game(update, EMOJIS_INVADE_URL)
+    await send_game_link(update, EMOJIS_INVADE_URL, context)
 
 async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await launch_game(update, SPACERUN_URL)
+    await send_game_link(update, SPACERUN_URL, context)
 
-async def launch_game(update: Update, game_url: str):
+async def send_game_link(update, url, context):
     user_id = update.effective_user.id
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
-            result = await cursor.fetchone()
-    if not result:
-        await update.message.reply_text("❌ Link your wallet with /linkEwallet.")
+            row = await cursor.fetchone()
+    if not row:
+        await update.message.reply_text("❌ Link your wallet with /linkEwallet")
         return
-    wallet = result[0]
-    url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&template_id={REQUIRED_TEMPLATE_ID}&collection_name=games4punks1"
+    wallet = row[0]
+    asset_url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&template_id={REQUIRED_TEMPLATE_ID}&collection_name=games4punks1"
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
+        async with session.get(asset_url) as resp:
             data = await resp.json()
     if data["data"]:
-        await update.message.reply_text(f"🎮 Launch game:\n{game_url}")
+        await update.message.reply_text(f"🎮 Play now: {url}")
     else:
-        await update.message.reply_text(f"🚫 NFT required.\nBuy here:\n{GAME_KEY_DROP_URL}")
+        await update.message.reply_text(f"🚫 NFT required. Buy here:\n{GAME_KEY_DROP_URL}")
 
-# --- Welcome ---
-async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    new_user = update.message.new_chat_members[0]
-    welcome = (
-        f"🎉 Welcome {new_user.first_name} to the GKniftyHEADS Crew!\n\n"
-        f"🎮 Play Web3 games:\n"
-        f"/plaE@GAMES4PUNKSBOT – Emojis Invade\n"
-        f"/spacerun@GAMES4PUNKSBOT – Spacerun3008\n\n"
-        f"🗝 NFT Required: GK3008 Game Key\n"
-        f"🔗 Buy: {GAME_KEY_DROP_URL}\n"
-        f"📲 Link: /linkEwallet\n"
-        f"🧠 Solve: /lfg"
-    )
-    await update.message.reply_text(welcome)
-
-# --- FastAPI ---
+# --- FastAPI Status ---
 @api.get("/")
-async def root():
-    return {"status": "GK3008 Bot is running"}
+async def root(): return {"status": "running"}
 
 @api.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(): return {"ok": True}
 
-# --- Run Bot ---
+# --- Main ---
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("lfg", lfg))
-    app.add_handler(CommandHandler("linkEwallet", link_wallet))
-    app.add_handler(CommandHandler("unlinkEwallet", unlink_wallet))
-    app.add_handler(CommandHandler("verifyEkey", verify_ekey))
     app.add_handler(CommandHandler("plaE", plaE))
     app.add_handler(CommandHandler("spacerun", spacerun))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
+    app.add_handler(CommandHandler("linkEwallet", link_wallet))
+    app.add_handler(CommandHandler("verifyEkey", verify_ekey))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("✅ GAMES4PUNKSBOT is running...")
+    print("✅ GK3008BOT is running...")
     await app.run_polling()
 
 if __name__ == "__main__":
