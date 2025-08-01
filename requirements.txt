@@ -4,4 +4,3 @@ fastapi
 nest-asyncio==1.5.4
 python-telegram-bot==20.0a2
 uvicorn
-python-dotenv
