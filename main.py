@@ -1,21 +1,26 @@
 import os
 import random
 import sqlite3
+import logging
 import threading
-import aiohttp
 import asyncio
+import aiohttp
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+# === CONFIG ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID", "1019741898"))
-GAME_KEY_TEMPLATE = "895159"
-GAME_URL_SPACERUN = "https://games4punks.github.io/spacerun3008/"
-GAME_URL_EMOJIS = "https://games4punks.github.io/emojisinvade/"
+OWNER_ID = 1019741898
+SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
+EMOJIS_URL = "https://games4punks.github.io/emojisinvade/"
+GAMEKEY_TEMPLATE_URL = "https://wax.atomichub.io/atomicassets/v1/assets?collection_name=games4punks1&template_id=895159&owner="
 
+# === DATABASE ===
 conn = sqlite3.connect("gkbot.db", check_same_thread=False)
 cur = conn.cursor()
 cur.execute("""
@@ -28,12 +33,162 @@ cur.execute("""
 """)
 conn.commit()
 
+# === LOGGING ===
+logging.basicConfig(level=logging.INFO)
+
+# === CAPTCHA CACHE ===
+pending_captchas = {}
+
 # === FASTAPI SERVER ===
 api = FastAPI()
 api.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@api.get("/api/wallet/{telegram_id}")
+def get_wallet_api(telegram_id: int):
+    cur.execute("SELECT wallet FROM users WHERE telegram_id = ?", (telegram_id,))
+    row = cur.fetchone()
+    return {"wallet": row[0] if row else ""}
+
+@api.get("/api/verified/{telegram_id}")
+async def get_verified_api(telegram_id: int):
+    cur.execute("SELECT wallet FROM users WHERE telegram_id = ?", (telegram_id,))
+    row = cur.fetchone()
+    if not row:
+        return {"verified": False}
+    wallet = row[0]
+    async with aiohttp.ClientSession() as session:
+        async with session.get(GAMEKEY_TEMPLATE_URL + wallet) as resp:
+            data = await resp.json()
+            return {"verified": data.get("data", []) != []}
+
+# === HELPERS ===
+async def has_game_key(wallet: str) -> bool:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(GAMEKEY_TEMPLATE_URL + wallet) as resp:
+            data = await resp.json()
+            return bool(data.get("data"))
+
+def get_wallet(telegram_id: int) -> str:
+    cur.execute("SELECT wallet FROM users WHERE telegram_id = ?", (telegram_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+# === COMMANDS ===
+async def link_ewallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in pending_captchas:
+        await update.message.reply_text("❗ You already have a pending CAPTCHA.")
+        return
+
+    a, b = random.randint(1, 9), random.randint(1, 9)
+    pending_captchas[user_id] = (a + b)
+    await update.message.reply_text(f"🧠 To link your wallet, solve this: {a} + {b} = ?")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in pending_captchas:
+        return
+
+    try:
+        answer = int(update.message.text.strip())
+    except ValueError:
+        await update.message.reply_text("❌ Please send a number.")
+        return
+
+    if answer == pending_captchas[user_id]:
+        del pending_captchas[user_id]
+        await update.message.reply_text("✅ Correct! Now send your WAX wallet address.")
+        context.user_data["awaiting_wallet"] = True
+    elif "awaiting_wallet" in context.user_data:
+        wallet = update.message.text.strip()
+        cur.execute("REPLACE INTO users (telegram_id, wallet) VALUES (?, ?)", (user_id, wallet))
+        conn.commit()
+        await update.message.reply_text(f"✅ Wallet linked: `{wallet}`", parse_mode="Markdown")
+        context.user_data.pop("awaiting_wallet", None)
+    else:
+        await update.message.reply_text("❌ Incorrect. Try /linkEwallet again.")
+        del pending_captchas[user_id]
+
+async def unlink_ewallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    cur.execute("DELETE FROM users WHERE telegram_id = ?", (user_id,))
+    conn.commit()
+    await update.message.reply_text("🔓 Wallet unlinked.")
+
+async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    wallet = get_wallet(user_id)
+    if not wallet:
+        await update.message.reply_text("❌ You must link a wallet first with /linkEwallet.")
+        return
+    if await has_game_key(wallet):
+        await update.message.reply_text("✅ You own the required NFT game key.")
+    else:
+        await update.message.reply_text("❌ No valid NFT found.\n🎟️ Buy one at: https://neftyblocks.com/collection/games4punks1/drops/236466")
+
+async def play_emojis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    wallet = get_wallet(user_id)
+    if not wallet:
+        await update.message.reply_text("❌ Link wallet first with /linkEwallet.")
+        return
+    if not await has_game_key(wallet):
+        await update.message.reply_text("❌ NFT game key not detected.")
+        return
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("▶️ Play Emojis Invade", url=EMOJIS_URL)]])
+    await update.message.reply_text("🕹️ Click to play Emojis Invade!", reply_markup=keyboard)
+
+async def play_spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    wallet = get_wallet(user_id)
+    if not wallet:
+        await update.message.reply_text("❌ Link wallet first with /linkEwallet.")
+        return
+    if not await has_game_key(wallet):
+        await update.message.reply_text("❌ NFT game key not detected.")
+        return
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Play SPACERUN3008", url=SPACERUN_URL)]])
+    await update.message.reply_text("🚀 Click to play SPACERUN3008!", reply_markup=keyboard)
+
+# === WELCOME MESSAGE ===
+async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.effective_user.first_name
+    await update.message.reply_text(
+        f"👋 Welcome {name}!\n\n"
+        "🎮 Play & Earn:\n"
+        "▶️ /plaE – Emojis Invade\n"
+        "🚀 /spacerun – SPACERUN3008\n\n"
+        "💳 You need an NFT key to play:\n"
+        "🎟️ https://neftyblocks.com/collection/games4punks1/drops/236466\n\n"
+        "🔗 Link your wallet:\n"
+        "/linkEwallet\n"
+        "✅ Check your key:\n"
+        "/verifyEkey"
+    )
+
+# === MAIN LAUNCH ===
+async def telegram_bot():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", welcome))
+    app.add_handler(CommandHandler("linkEwallet", link_ewallet))
+    app.add_handler(CommandHandler("unlinkEwallet", unlink_ewallet))
+    app.add_handler(CommandHandler("verifyEkey", verify_ekey))
+    app.add_handler(CommandHandler("plaE", play_emojis))
+    app.add_handler(CommandHandler("spacerun", play_spacerun))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    print("✅ GK3008BOT is online.")
+    await app.run_polling()
+
+if __name__ == "__main__":
+    threading.Thread(target=lambda: uvicorn.run(api, host="0.0.0.0", port=8000)).start()
+    asyncio.run(telegram_bot())
     allow_headers=["*"],
 )
 
