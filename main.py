@@ -8,6 +8,10 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import nest_asyncio
 import asyncio
+from dotenv import load_dotenv
+
+# Load environment variables locally (optional)
+load_dotenv()
 
 nest_asyncio.apply()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -17,6 +21,7 @@ EMOJIS_INVADE_URL = "https://games4punks.github.io/emojisinvade/"
 SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # FastAPI
 api = FastAPI()
@@ -59,6 +64,7 @@ async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
         await db.execute("INSERT OR REPLACE INTO linked_wallets (telegram_id, wallet) VALUES (?, ?)", (user_id, wallet))
         await db.commit()
+    logger.info(f"Wallet linked: {wallet} for user {user_id}")
     await update.message.reply_text(f"🔗 WAX wallet {wallet} linked!")
 
 async def unlink_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,11 +72,17 @@ async def unlink_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with aiosqlite.connect("botdata.db") as db:
         await db.execute("DELETE FROM linked_wallets WHERE telegram_id = ?", (user_id,))
         await db.commit()
+    logger.info(f"Wallet unlinked for user {user_id}")
     await update.message.reply_text("❌ Wallet unlinked.")
 
-# --- NFT Verification ---
+# --- NFT Verification (Admin-Only) ---
 async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    admin_ids = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
     user_id = update.effective_user.id
+    if user_id not in admin_ids:
+        await update.message.reply_text("🚫 Admins only.")
+        return
+
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
@@ -82,6 +94,7 @@ async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
             data = await resp.json()
+    logger.info(f"NFT verification checked for {wallet}: Found={bool(data['data'])}")
     if data["data"]:
         await update.message.reply_text("✅ You own the required GK3008 Game Key NFT!")
     else:
@@ -166,5 +179,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
