@@ -1,9 +1,10 @@
-python-telegram-bot==20.0a2
-fastapi
-uvicorn
-aiohttp
-nest-asyncio==1.5.4
 aiosqlite
+aiohttp
+fastapi
+nest-asyncio==1.5.4
+python-telegram-bot==20.0a2
+uvicorn
+
 
 
 
