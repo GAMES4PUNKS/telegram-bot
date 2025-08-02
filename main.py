@@ -1,41 +1,41 @@
 import os
 import logging
 import random
-import asyncio
 import aiosqlite
 import aiohttp
 import nest_asyncio
+import asyncio
 from fastapi import FastAPI
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+    ApplicationBuilder, CommandHandler, ContextTypes,
+    MessageHandler, filters
 )
 
-# Apply Asyncio Patch
+# Apply nest_asyncio patch
 nest_asyncio.apply()
 
-# Config
+# Load BOT TOKEN
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-REQUIRED_TEMPLATE_ID = "895159"
-GAME_KEY_DROP_URL = "https://neftyblocks.com/collection/games4punks1/drops/236466"
-EMOJIS_INVADE_URL = "https://games4punks.github.io/emojisinvade/"
-SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
-OWNER_CHAT_ID = 1019741898
+print(f"Loaded BOT_TOKEN: {BOT_TOKEN}")
 
-logging.basicConfig(level=logging.INFO)
-
+# FastAPI healthcheck (optional)
 api = FastAPI()
 
-pending_challenges = {}
-players = set()
-
-# FastAPI Root
 @api.get("/")
 async def root():
     return {"status": "GK3008BOT running"}
 
-# Commands
+# Game Config
+REQUIRED_TEMPLATE_ID = "895159"
+GAME_KEY_DROP_URL = "https://neftyblocks.com/collection/games4punks1/drops/236466"
+EMOJIS_INVADE_URL = "https://games4punks.github.io/emojisinvade/"
+SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
+
+# In-memory CAPTCHA challenges
+pending_challenges = {}
+
+# Commands & Handlers
 async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     a = random.randint(1, 10)
@@ -49,14 +49,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if int(update.message.text.strip()) == pending_challenges[user_id]:
                 del pending_challenges[user_id]
-                players.add(user_id)
                 await update.message.reply_text("✅ Verified! Use /plaE or /spacerun to begin.")
             else:
                 await update.message.reply_text("❌ Wrong answer. Try again.")
         except:
             await update.message.reply_text("❌ Please enter a number.")
-    else:
-        await update.message.reply_text("Use /lfg to start.")
 
 async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -95,7 +92,6 @@ async def plaE(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
-
     if not result:
         await update.message.reply_text("❌ Link your wallet first with /linkEwallet.")
         return
@@ -116,7 +112,6 @@ async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
-
     if not result:
         await update.message.reply_text("❌ Link your wallet first with /linkEwallet.")
         return
@@ -135,18 +130,20 @@ async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_member = update.message.new_chat_members[0]
     welcome_message = (
-        f"🎉 Welcome {new_member.first_name} to the GKniftyHEADS Channel! 🎮\n\n"
-        f"▶️ /spacerun — Play SPACERUN3008\n"
-        f"▶️ /plaE — Play Emojis Invade\n"
-        f"▶️ /linkEwallet — Link your WAX Wallet\n"
-        f"▶️ /verifyEkey — Verify your Game Key NFT\n"
-        f"▶️ /lfg — Human Verification Test\n\n"
-        f"🚀 Let's GO!"
+        f"🎉 Welcome {new_member.first_name} to the **GKniftyHEADS** Channel! 🎮\n\n"
+        f"Use /spacerun or /plaE to play our games and win WAX NFTs! 🚀"
     )
     await update.message.reply_text(welcome_message)
 
-async def run_bot():
+# Main Bot Runner
+async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    await app.bot.delete_webhook()
+
+    async with aiosqlite.connect("botdata.db") as db:
+        await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
+        await db.commit()
 
     app.add_handler(CommandHandler("lfg", lfg))
     app.add_handler(CommandHandler("linkEwallet", link_wallet))
@@ -156,21 +153,8 @@ async def run_bot():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
-    await app.initialize()
-    await app.start()
-    app.updater.start_polling()
-    print("✅ Bot started polling")
-
-@api.on_event("startup")
-async def startup():
-    async with aiosqlite.connect("botdata.db") as db:
-        await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
-        await db.commit()
-    scheduler = AsyncIOScheduler()
-    scheduler.start()
-    asyncio.create_task(run_bot())
+    print("✅ Bot polling started...")
+    await app.run_polling()
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:api", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), log_level="info")
-
+    asyncio.run(main())
