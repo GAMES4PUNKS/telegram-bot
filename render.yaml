@@ -3,9 +3,10 @@ services:
     name: telegram-bot
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:api --host 0.0.0.0 --port $PORT
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:api --host 0.0.0.0 --port $PORT"
     envVars:
       - key: BOT_TOKEN
-        sync: false  # It's stored in Render Dashboard Environment Variables
-
+        sync: false
+    autoDeploy: true
+    region: oregon
