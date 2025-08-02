@@ -6,71 +6,56 @@ __pycache__/
 # C extensions
 *.so
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Virtual environments
+# Virtual environment
 .venv/
+env/
 venv/
 ENV/
-env/
-.env/
-.envrc
+env.bak/
 
-# IDEs and editors
-.idea/
+# Editor-specific files
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*~
+
+# VSCode
 .vscode/
-*.sublime-project
-*.sublime-workspace
 
-# PyCharm specific
-*.iml
+# PyCharm
+.idea/
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# macOS
+.DS_Store
 
-# Pyre type checker
-.pyre/
-
-# Mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# SQLite Database
+# Logs and local database
+*.log
 botdata.db
 
-# Render deployment cache
-render-cache
+# Secrets and credentials
+.env
+*.env
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Render deployment cache (if any)
+.cache/
+
+# System files
+Thumbs.db
+ehthumbs.db
+
+# Ignore NFT images / media files if not needed in repo
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.webp
+*.svg
 
