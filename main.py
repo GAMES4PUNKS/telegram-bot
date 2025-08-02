@@ -1,41 +1,39 @@
 import os
 import logging
 import random
-import aiosqlite
 import aiohttp
+import aiosqlite
+from fastapi import FastAPI, Request
+from telegram import Bot, Update
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, ContextTypes, filters
+)
 import nest_asyncio
 import asyncio
-from fastapi import FastAPI
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes,
-    MessageHandler, filters
-)
 
-# Apply nest_asyncio patch
 nest_asyncio.apply()
 
-# Load BOT TOKEN
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-print(f"Loaded BOT_TOKEN: {BOT_TOKEN}")
-
-# FastAPI healthcheck (optional)
-api = FastAPI()
-
-@api.get("/")
-async def root():
-    return {"status": "GK3008BOT running"}
-
-# Game Config
 REQUIRED_TEMPLATE_ID = "895159"
 GAME_KEY_DROP_URL = "https://neftyblocks.com/collection/games4punks1/drops/236466"
 EMOJIS_INVADE_URL = "https://games4punks.github.io/emojisinvade/"
 SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
+WEBHOOK_URL = f"https://telegram-bot-mq0b.onrender.com/webhook"
 
-# In-memory CAPTCHA challenges
+# Logging
+logging.basicConfig(level=logging.INFO)
+
+# FastAPI app
+api = FastAPI()
+
+# In-memory challenge store
 pending_challenges = {}
 
-# Commands & Handlers
+# Telegram Bot & Application
+bot = Bot(token=BOT_TOKEN)
+app = Application.builder().token(BOT_TOKEN).build()
+
+# Handlers Logic
 async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     a = random.randint(1, 10)
@@ -54,6 +52,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ Wrong answer. Try again.")
         except:
             await update.message.reply_text("❌ Please enter a number.")
+    else:
+        await update.message.reply_text("Use /lfg to start.")
 
 async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -127,20 +127,25 @@ async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"🚫 NFT required.\nBuy here:\n{GAME_KEY_DROP_URL}")
 
-async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    new_member = update.message.new_chat_members[0]
-    welcome_message = (
-        f"🎉 Welcome {new_member.first_name} to the **GKniftyHEADS** Channel! 🎮\n\n"
-        f"Use /spacerun or /plaE to play our games and win WAX NFTs! 🚀"
-    )
-    await update.message.reply_text(welcome_message)
+# --- FastAPI Routes ---
+@api.get("/")
+async def root():
+    return {"status": "GK3008BOT running"}
 
-# Main Bot Runner
+@api.post("/webhook")
+async def telegram_webhook(req: Request):
+    data = await req.json()
+    update = Update.de_json(data, bot)
+    await app.process_update(update)
+    return {"ok": True}
+
+# --- Main Async Start ---
 async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    await app.initialize()
+    await bot.set_webhook(url=WEBHOOK_URL)
+    print(f"🚀 Webhook set to {WEBHOOK_URL}")
 
-    await app.bot.delete_webhook()
-
+    # Ensure DB Table Exists
     async with aiosqlite.connect("botdata.db") as db:
         await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
         await db.commit()
@@ -151,10 +156,7 @@ async def main():
     app.add_handler(CommandHandler("plaE", plaE))
     app.add_handler(CommandHandler("spacerun", spacerun))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
-    print("✅ Bot polling started...")
-    await app.run_polling()
+    print("✅ GK3008BOT is ready for webhooks!")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
