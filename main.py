@@ -31,8 +31,9 @@ api = FastAPI()
 async def root():
     return {"status": "GK3008BOT running"}
 
-# In-memory challenge
+# In-memory verification
 pending_challenges = {}
+verified_users = set()
 
 # --- /lfg Command ---
 async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -42,20 +43,23 @@ async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending_challenges[user_id] = a + b
     await update.message.reply_text(f"🧠 Solve this: What is {a} + {b}?")
 
-# --- Handle CAPTCHA Answer ---
+# --- Handle CAPTCHA Answer or fallback ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in pending_challenges:
         try:
             if int(update.message.text.strip()) == pending_challenges[user_id]:
                 del pending_challenges[user_id]
+                verified_users.add(user_id)
                 await update.message.reply_text("✅ Verified! Use /plaE or /spacerun to begin.")
             else:
                 await update.message.reply_text("❌ Wrong answer. Try again.")
         except:
             await update.message.reply_text("❌ Please enter a number.")
+    elif user_id in verified_users:
+        await update.message.reply_text("⚡ Use /plaE or /spacerun.")
     else:
-        await update.message.reply_text("Use /lfg to start.")
+        await update.message.reply_text("Use /lfg to start verification.")
 
 # --- Link Wallet ---
 async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,3 +172,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
