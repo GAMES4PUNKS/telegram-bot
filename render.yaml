@@ -1,14 +1,13 @@
 services:
   - type: web
-    name: gk3008bot
+    name: telegram-bot
     env: python
-    plan: free
-    region: frankfurt
-    branch: main
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    healthCheckPath: /
+    plan: free  # Change to 'starter' or 'standard' for paid tier if needed
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn main:api --bind 0.0.0.0:$PORT --worker-class uvicorn.workers.UvicornWorker"
+    autoDeploy: true
     envVars:
       - key: BOT_TOKEN
-        sync: false  # Set BOT_TOKEN manually in Render Dashboard or use a Secret Manager
-    autoDeploy: true
+        sync: false  # Add your token in Render Dashboard
+    healthCheckPath: /
+    region: oregon  # Or your preferred Render region
