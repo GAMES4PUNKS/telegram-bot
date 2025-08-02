@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: gk3008bot
+    env: python
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /
+    envVars:
+      - key: BOT_TOKEN
+        sync: false  # Set BOT_TOKEN manually in Render Dashboard or use a Secret Manager
+    autoDeploy: true
