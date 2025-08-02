@@ -22,6 +22,9 @@ GAME_KEY_DROP_URL = "https://neftyblocks.com/collection/games4punks1/drops/23646
 EMOJIS_INVADE_URL = "https://games4punks.github.io/emojisinvade/"
 SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
 
+# SQLite Persistent DB Path for Render Disk
+DB_PATH = "/data/botdata.db"
+
 # Logging
 logging.basicConfig(level=logging.INFO)
 
@@ -70,7 +73,7 @@ async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wallet = context.args[0]
     user_id = update.effective_user.id
 
-    async with aiosqlite.connect("botdata.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
         await db.execute("INSERT OR REPLACE INTO linked_wallets (telegram_id, wallet) VALUES (?, ?)", (user_id, wallet))
         await db.commit()
@@ -88,7 +91,7 @@ async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗ You must /lfg verify first.")
         return
 
-    async with aiosqlite.connect("botdata.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
     if not result:
@@ -114,7 +117,7 @@ async def plaE(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗ You must /lfg verify first.")
         return
 
-    async with aiosqlite.connect("botdata.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
     if not result:
@@ -143,7 +146,7 @@ async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗ You must /lfg verify first.")
         return
 
-    async with aiosqlite.connect("botdata.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
     if not result:
@@ -168,7 +171,7 @@ async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    async with aiosqlite.connect("botdata.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
         await db.commit()
     print("✅ Database ready.")
@@ -185,5 +188,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
