@@ -11,11 +11,12 @@ from telegram.ext import (
 )
 import nest_asyncio
 import asyncio
+import uvicorn
 
-# Asyncio Patch for environments
+# Patch asyncio for nested loops
 nest_asyncio.apply()
 
-# Configurations
+# Configs
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 REQUIRED_TEMPLATE_ID = "895159"
 GAME_KEY_DROP_URL = "https://neftyblocks.com/collection/games4punks1/drops/236466"
@@ -25,18 +26,18 @@ SPACERUN_URL = "https://games4punks.github.io/spacerun3008/"
 # Logging
 logging.basicConfig(level=logging.INFO)
 
-# FastAPI App (for Render)
+# FastAPI App
 api = FastAPI()
 
 @api.get("/")
 async def root():
     return {"status": "GK3008BOT running"}
 
-# In-memory user states
+# In-Memory User States
 pending_challenges = {}
 verified_users = set()
 
-# --- /lfg Command ---
+# --- Telegram Bot Handlers ---
 async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     a = random.randint(1, 10)
@@ -44,7 +45,6 @@ async def lfg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending_challenges[user_id] = a + b
     await update.message.reply_text(f"🧠 Solve this: What is {a} + {b}?")
 
-# --- Handle Math Answer ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in pending_challenges:
@@ -62,72 +62,59 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❗ Start with /lfg to verify first.")
 
-# --- Link Wallet Command ---
 async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Usage: /linkEwallet yourwaxwallet")
         return
     wallet = context.args[0]
     user_id = update.effective_user.id
-
     async with aiosqlite.connect("botdata.db") as db:
         await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
         await db.execute("INSERT OR REPLACE INTO linked_wallets (telegram_id, wallet) VALUES (?, ?)", (user_id, wallet))
         await db.commit()
-
     verified_users.add(user_id)
     if user_id in pending_challenges:
         del pending_challenges[user_id]
-
     await update.message.reply_text(f"🔗 Wallet {wallet} linked! ✅ Verified.\nNow use /plaE or /spacerun to play.")
 
-# --- Verify NFT Key ---
 async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in verified_users:
         await update.message.reply_text("❗ You must /lfg verify first.")
         return
-
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
     if not result:
         await update.message.reply_text("❌ No wallet linked. Use /linkEwallet first.")
         return
-
     wallet = result[0]
     url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&template_id={REQUIRED_TEMPLATE_ID}&collection_name=games4punks1"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
             data = await resp.json()
-
     if data["data"]:
         await update.message.reply_text("✅ You own the GK3008 Game Key NFT!")
     else:
         await update.message.reply_text(f"🚫 NFT not found. Buy here:\n{GAME_KEY_DROP_URL}")
 
-# --- /plaE Command ---
 async def plaE(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("⚙️ /plaE triggered")
     user_id = update.effective_user.id
     if user_id not in verified_users:
         await update.message.reply_text("❗ You must /lfg verify first.")
         return
-
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
     if not result:
         await update.message.reply_text("❌ No wallet linked. Use /linkEwallet.")
         return
-
     wallet = result[0]
-    print(f"🔍 Checking NFT for wallet: {wallet}")
     url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&template_id={REQUIRED_TEMPLATE_ID}&collection_name=games4punks1"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
             data = await resp.json()
-
     if data["data"]:
         print("✅ NFT found. Sending Emojis Invade link.")
         await update.message.reply_text(f"🎮 Play Emojis Invade:\n{EMOJIS_INVADE_URL}")
@@ -135,28 +122,23 @@ async def plaE(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("🚫 NFT not found for /plaE")
         await update.message.reply_text(f"🚫 NFT required. Buy here:\n{GAME_KEY_DROP_URL}")
 
-# --- /spacerun Command ---
 async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("⚙️ /spacerun triggered")
     user_id = update.effective_user.id
     if user_id not in verified_users:
         await update.message.reply_text("❗ You must /lfg verify first.")
         return
-
     async with aiosqlite.connect("botdata.db") as db:
         async with db.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = ?", (user_id,)) as cursor:
             result = await cursor.fetchone()
     if not result:
         await update.message.reply_text("❌ No wallet linked. Use /linkEwallet.")
         return
-
     wallet = result[0]
-    print(f"🔍 Checking NFT for wallet: {wallet}")
     url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&template_id={REQUIRED_TEMPLATE_ID}&collection_name=games4punks1"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
             data = await resp.json()
-
     if data["data"]:
         print("✅ NFT found. Sending Spacerun link.")
         await update.message.reply_text(f"🚀 Play Spacerun3008:\n{SPACERUN_URL}")
@@ -164,10 +146,14 @@ async def spacerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("🚫 NFT not found for /spacerun")
         await update.message.reply_text(f"🚫 NFT required. Buy here:\n{GAME_KEY_DROP_URL}")
 
-# --- Telegram Bot Runner ---
-async def bot_runner():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+# --- Bot Startup on FastAPI Startup ---
+@api.on_event("startup")
+async def startup_event():
+    asyncio.create_task(start_bot())
 
+# --- Bot Main Loop ---
+async def start_bot():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     async with aiosqlite.connect("botdata.db") as db:
         await db.execute("CREATE TABLE IF NOT EXISTS linked_wallets (telegram_id INTEGER PRIMARY KEY, wallet TEXT NOT NULL)")
         await db.commit()
@@ -180,21 +166,10 @@ async def bot_runner():
     app.add_handler(CommandHandler("spacerun", spacerun))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    print("🚀 GK3008BOT running...")
+    print("🚀 GK3008BOT is running polling...")
     await app.run_polling()
 
-# --- Launch Bot Task on FastAPI Startup ---
-@api.on_event("startup")
-async def startup_event():
-    asyncio.create_task(bot_runner())
-
-# --- Run FastAPI Server ---
+# --- Start FastAPI Server ---
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run("main:api", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
 
-
-# --- Launch Bot Task on Startup ---
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(bot_runner())
