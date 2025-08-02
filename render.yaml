@@ -2,12 +2,10 @@ services:
   - type: web
     name: telegram-bot
     env: python
-    plan: free  # Change to 'starter' or 'standard' for paid tier if needed
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn main:api --bind 0.0.0.0:$PORT --worker-class uvicorn.workers.UvicornWorker"
-    autoDeploy: true
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:api --host 0.0.0.0 --port $PORT
     envVars:
       - key: BOT_TOKEN
-        sync: false  # Add your token in Render Dashboard
-    healthCheckPath: /
-    region: oregon  # Or your preferred Render region
+        sync: false  # It's stored in Render Dashboard Environment Variables
+
