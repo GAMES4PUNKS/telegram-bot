@@ -1,6 +1,0 @@
-services:
-  - type: worker
-    name: GK3008BOT
-    env: python
-    buildCommand: ""
-    startCommand: python main.py
