@@ -3,30 +3,74 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environment files
-.env
-.env.*
+# C extensions
+*.so
 
-# SQLite databases and logs
-*.db
-*.sqlite3
-*.log
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
 
 # Virtual environments
-venv/
-.env/
 .venv/
+venv/
+ENV/
+env/
+.env/
+.envrc
 
-# OS-generated files
-.DS_Store
-Thumbs.db
-
-# Python-specific
-.python-version
-
-# VSCode
+# IDEs and editors
+.idea/
 .vscode/
+*.sublime-project
+*.sublime-workspace
 
-# Railway & deployment cache
-railway.json
+# PyCharm specific
+*.iml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Pyre type checker
+.pyre/
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# SQLite Database
+botdata.db
+
+# Render deployment cache
+render-cache
 
