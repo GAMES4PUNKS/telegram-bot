@@ -1,49 +1,57 @@
+# db.py
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-import sqlite3
+DB_URL = os.getenv("DATABASE_URL")
 
-DB_NAME = "gkbot.db"
+conn = psycopg2.connect(DB_URL, cursor_factory=RealDictCursor)
+conn.autocommit = True
 
-def init_db():
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""
+# INIT DB
+with conn.cursor() as cur:
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS linked_wallets (
-            telegram_id INTEGER PRIMARY KEY,
+            telegram_id BIGINT PRIMARY KEY,
             wallet TEXT NOT NULL
-        )""")
-        conn.execute("""
+        );
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS verified_users (
-            telegram_id INTEGER PRIMARY KEY,
+            telegram_id BIGINT PRIMARY KEY,
             wallet TEXT NOT NULL,
-            verified INTEGER DEFAULT 0
-        )""")
+            verified BOOLEAN DEFAULT FALSE
+        );
+    """)
 
 def link_wallet(telegram_id: int, wallet: str):
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""REPLACE INTO linked_wallets (telegram_id, wallet)
-                         VALUES (?, ?)""", (telegram_id, wallet))
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO linked_wallets (telegram_id, wallet)
+            VALUES (%s, %s)
+            ON CONFLICT (telegram_id) DO UPDATE SET wallet = EXCLUDED.wallet;
+        """, (telegram_id, wallet))
 
 def get_wallet(telegram_id: int):
-    with sqlite3.connect(DB_NAME) as conn:
-        result = conn.execute("""SELECT wallet FROM linked_wallets
-                                 WHERE telegram_id = ?""", (telegram_id,)).fetchone()
-        return result[0] if result else None
+    with conn.cursor() as cur:
+        cur.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
+        row = cur.fetchone()
+        return row['wallet'] if row else None
 
 def unlink_wallet(telegram_id: int):
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""DELETE FROM linked_wallets WHERE telegram_id = ?""", (telegram_id,))
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
 
 def set_verified(telegram_id: int, wallet: str):
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""
+    with conn.cursor() as cur:
+        cur.execute("""
             INSERT INTO verified_users (telegram_id, wallet, verified)
-            VALUES (?, ?, 1)
-            ON CONFLICT(telegram_id) DO UPDATE SET verified = 1, wallet = ?
+            VALUES (%s, %s, TRUE)
+            ON CONFLICT (telegram_id) DO UPDATE SET verified = TRUE, wallet = EXCLUDED.wallet;
         """, (telegram_id, wallet))
 
 def is_wallet_verified(wallet: str):
-    with sqlite3.connect(DB_NAME) as conn:
-        result = conn.execute("""
-            SELECT verified FROM verified_users
-            WHERE wallet = ? AND verified = 1
-        """, (wallet,)).fetchone()
-        return bool(result)
+    with conn.cursor() as cur:
+        cur.execute("SELECT verified FROM verified_users WHERE wallet = %s AND verified = TRUE", (wallet,))
+        row = cur.fetchone()
+        return bool(row)
