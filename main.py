@@ -1,97 +1,98 @@
 import os
 import asyncio
-from fastapi import FastAPI
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
-import httpx
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ChatMemberHandler
+import aiohttp
+import logging
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-NFT_TEMPLATES = [
+
+# NFT Template IDs
+GAME_KEY_TEMPLATES = [
     "898303",  # GAME-KEY-ROYALE
     "895159",  # GK3008-Game-Key
     "1099966577767"  # GAME-KEY-BATTLE-ROYALE
 ]
 
-app = FastAPI()
+async def fetch_user_assets(wax_account):
+    async with aiohttp.ClientSession() as session:
+        url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?collection_name=games4punks1&owner={wax_account}&page=1&limit=100&order=desc&sort=asset_id"
+        async with session.get(url) as resp:
+            data = await resp.json()
+            return data.get('data', [])
 
-telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-# WELCOME MESSAGE HANDLER
 async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = update.effective_user.language_code
-    message = "Welcome to GKniftyHEADS! To play Web3 GK Games & earn FREE NFTs, you must own a GK Game Key NFT: https://neftyblocks.com/collection/games4punks1/drops"
-    if lang != "en":
-        message += f"\n(Your detected language: {lang}. Currently, only English is supported.)"
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+    for member in update.chat_member.new_chat_members:
+        lang = member.language_code if member.language_code else 'en'
+        if lang.startswith('es'):
+            msg = "🔥 Bienvenido a GKniftyHEADS! Para jugar juegos Web3 y ganar NFTs GRATIS necesitas una GAME KEY NFT: https://neftyblocks.com/collection/games4punks1/drops"
+        else:
+            msg = "🔥 Welcome to GKniftyHEADS! To play Web3 GK games & earn FREE NFTs you must own a GK Game Key NFT: https://neftyblocks.com/collection/games4punks1/drops"
+        await context.bot.send_message(chat_id=update.chat_member.chat.id, text=msg)
 
-# STATUS COMMAND
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    wallet = await get_user_wallet(user_id)
-    if wallet:
-        owns_key = await check_nft_ownership(wallet)
-        if owns_key:
-            await update.message.reply_text("GAME SERVER IS LIVE WHAT YOU WAITING FOR")
-            return
-    await update.message.reply_text("Yes GK Games4PUNKS Studio is LIVE, purchase 1 of 2 available Game Key NFTs to play games: https://neftyblocks.com/collection/games4punks1/drops")
+    linked_wallet = context.chat_data.get('wax_wallet')
+    if not linked_wallet:
+        await update.message.reply_text("You need to /linkEwallet to check your status.")
+        return
 
-# LINK EWALLET COMMAND
-user_wallets = {}
+    assets = await fetch_user_assets(linked_wallet)
+    owns_game_key = any(asset['template']['template_id'] in GAME_KEY_TEMPLATES for asset in assets if asset.get('template'))
 
-async def linkEwallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if owns_game_key:
+        await update.message.reply_text("GAME SERVER IS LIVE! WHAT YOU WAITING FOR?")
+    else:
+        await update.message.reply_text("GK Studio is LIVE, but you need to own a Game Key NFT: https://neftyblocks.com/collection/games4punks1/drops")
+
+async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
-        wallet = context.args[0]
-        user_wallets[update.effective_user.id] = wallet
-        await update.message.reply_text(f"Wallet {wallet} linked successfully!")
+        wax_wallet = context.args[0]
+        context.chat_data['wax_wallet'] = wax_wallet
+        await update.message.reply_text(f"WAX wallet {wax_wallet} linked successfully!")
     else:
-        await update.message.reply_text("Please provide your wallet address: /linkEwallet your_wallet")
+        await update.message.reply_text("Usage: /linkEwallet YOUR_WAX_WALLET")
 
-async def unlinkEwallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_wallets.pop(update.effective_user.id, None)
-    await update.message.reply_text("Your wallet has been unlinked.")
+async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    linked_wallet = context.chat_data.get('wax_wallet')
+    if not linked_wallet:
+        await update.message.reply_text("You need to /linkEwallet first.")
+        return
 
-# VERIFY EKEY
-async def verifyEkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    wallet = await get_user_wallet(user_id)
-    if wallet and await check_nft_ownership(wallet):
-        await update.message.reply_text("YEP YOU READY FOR HODL WARS ⚡️⚡️⚡️")
+    assets = await fetch_user_assets(linked_wallet)
+    owns_game_key = any(asset['template']['template_id'] in GAME_KEY_TEMPLATES for asset in assets if asset.get('template'))
+
+    if owns_game_key:
+        await update.message.reply_text("YEP YOU READY FOR HODL WARS ⚔️⚔️⚔️")
     else:
-        await update.message.reply_text("No Game Key NFT found. Please purchase one to proceed.")
+        await update.message.reply_text("No valid Game Key NFT found. Please get one: https://neftyblocks.com/collection/games4punks1/drops")
 
-# GAME LINKS
 async def snakerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Play SnakeRun: https://hodlkong64.github.io/snakerun/")
 
 async def emojipunks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Play Emojipunks: https://games4punks.github.io/emojisinvade/")
 
-# UTILITIES
-async def get_user_wallet(user_id):
-    return user_wallets.get(user_id)
+async def unlink_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.chat_data.pop('wax_wallet', None)
+    await update.message.reply_text("Wallet unlinked successfully.")
 
-async def check_nft_ownership(wallet):
-    async with httpx.AsyncClient() as client:
-        url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&template_whitelist={','.join(NFT_TEMPLATES)}"
-        response = await client.get(url)
-        data = response.json()
-        return len(data.get("data", [])) > 0
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# REGISTER HANDLERS
-telegram_app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
-telegram_app.add_handler(CommandHandler("status", status))
-telegram_app.add_handler(CommandHandler("linkEwallet", linkEwallet))
-telegram_app.add_handler(CommandHandler("unlinkEwallet", unlinkEwallet))
-telegram_app.add_handler(CommandHandler("verifyEkey", verifyEkey))
-telegram_app.add_handler(CommandHandler("snakerun", snakerun))
-telegram_app.add_handler(CommandHandler("emojipunks", emojipunks))
+    app.add_handler(ChatMemberHandler(welcome, ChatMemberHandler.CHAT_MEMBER))
+    app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("linkEwallet", link_wallet))
+    app.add_handler(CommandHandler("verifyEkey", verify_ekey))
+    app.add_handler(CommandHandler("snakerun", snakerun))
+    app.add_handler(CommandHandler("emojipunks", emojipunks))
+    app.add_handler(CommandHandler("unlinkEwallet", unlink_wallet))
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(telegram_app.run_polling())
+    await app.run_polling()
 
-@app.get("/")
-async def root():
-    return {"message": "GK Bot is running"}
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
+
 
 
