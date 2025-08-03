@@ -5,21 +5,21 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import nest_asyncio
 
-# Force asyncio to allow nested loops (Render)
+# Allow nested event loops (important for Render)
 nest_asyncio.apply()
 
-# Get BOT TOKEN from Environment Variables
+# Get the BOT Token securely
 BOT_TOKEN = os.getenv("BOT_TOKEN", "false")
 
 if BOT_TOKEN == "false":
-    raise ValueError("BOT_TOKEN environment variable not set in Render Dashboard.")
+    raise ValueError("BOT_TOKEN environment variable not found!")
 
-# FastAPI App (dummy endpoint for Render healthcheck)
+# Initialize FastAPI
 app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "Bot is running"}
+    return {"status": "BOT IS LIVE AND RUNNING"}
 
 # Command Handlers
 async def link_ewallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -31,27 +31,21 @@ async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def plae(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Here is your game link: https://emojisinvade.games4punks.io")
 
-# Polling Loop Function
-async def run_bot():
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+# Async function to start Telegram Bot polling
+async def start_bot():
+    app_builder = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    application.add_handler(CommandHandler("linkEwallet", link_ewallet))
-    application.add_handler(CommandHandler("verifyEkey", verify_ekey))
-    application.add_handler(CommandHandler("plaE", plae))
+    app_builder.add_handler(CommandHandler("linkEwallet", link_ewallet))
+    app_builder.add_handler(CommandHandler("verifyEkey", verify_ekey))
+    app_builder.add_handler(CommandHandler("plaE", plae))
 
-    # Start polling forever
-    await application.run_polling()
+    print("Bot polling started...")
+    await app_builder.run_polling()
 
-# Startup Event
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(run_bot())
-
-
-
-
-
-
-
-
-
+# Main asyncio event loop
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(asyncio.gather(
+        start_bot(),  # Start Telegram Bot Polling
+        app.router.startup(),  # FastAPI Startup
+    ))
