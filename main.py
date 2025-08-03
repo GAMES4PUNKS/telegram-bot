@@ -1,7 +1,7 @@
 import os
 import logging
 import httpx
-from telegram import Update, Bot
+from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from dotenv import load_dotenv
 
@@ -77,7 +77,7 @@ async def get_linked_wallet(telegram_id: int) -> str | None:
 
 # --- TELEGRAM BOT HANDLERS ---
 
-def welcome_new_member(update: Update, context: CallbackContext):
+async def welcome_new_member(update: Update, context: CallbackContext):
     """Sends a welcome message to new members joining the group."""
     message = (
         "🔥 Welcome to GKniftyHEADS! 🔥\n\n"
@@ -85,7 +85,7 @@ def welcome_new_member(update: Update, context: CallbackContext):
         "You need a GK Game Key NFT.\n\n"
         f"Grab yours here: {MARKET_URL}"
     )
-    update.message.reply_text(message)
+    await update.message.reply_text(message)
 
 async def status_command(update: Update, context: CallbackContext):
     """Checks if the user has a linked wallet and if it holds a valid NFT."""
@@ -93,7 +93,7 @@ async def status_command(update: Update, context: CallbackContext):
     wallet_address = await get_linked_wallet(telegram_id)
 
     if not wallet_address:
-        update.message.reply_text(
+        await update.message.reply_text(
             f"❌ You haven't linked a wallet yet!\n"
             f"Use `/linkEwallet YOUR_WALLET_ADDRESS` in a private message with me.\n\n"
             f"Don't have a key? Get one here: {MARKET_URL}"
@@ -102,19 +102,19 @@ async def status_command(update: Update, context: CallbackContext):
 
     has_nft = await check_wax_wallet_for_nft(wallet_address)
     if has_nft:
-        update.message.reply_text("✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use /verifyEkey to confirm and play!")
+        await update.message.reply_text("✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use /verifyEkey to confirm and play!")
     else:
-        update.message.reply_text(f"❌ Your linked wallet `{wallet_address}` does not hold a Game Key NFT.\n\nPurchase one here: {MARKET_URL}")
+        await update.message.reply_text(f"❌ Your linked wallet `{wallet_address}` does not hold a Game Key NFT.\n\nPurchase one here: {MARKET_URL}")
 
 
 async def link_wallet_command(update: Update, context: CallbackContext):
     """Links a user's Telegram ID to their WAX wallet address in Supabase."""
     if update.message.chat.type != 'private':
-        update.message.reply_text("For your security, please use this command in a private message with me.")
+        await update.message.reply_text("For your security, please use this command in a private message with me.")
         return
 
     if not context.args:
-        update.message.reply_text("Please provide your WAX wallet address. Usage: /linkEwallet YOUR_WALLET")
+        await update.message.reply_text("Please provide your WAX wallet address. Usage: /linkEwallet YOUR_WALLET")
         return
 
     telegram_id = update.effective_user.id
@@ -129,9 +129,9 @@ async def link_wallet_command(update: Update, context: CallbackContext):
         response = await client.post(url, headers=supabase_headers, json=payload, params=params)
 
     if response.status_code in [200, 201, 204]:
-        update.message.reply_text(f"✅ Wallet `{wallet}` linked successfully!")
+        await update.message.reply_text(f"✅ Wallet `{wallet}` linked successfully!")
     else:
-        update.message.reply_text("❌ There was an error linking your wallet. Please try again later.")
+        await update.message.reply_text("❌ There was an error linking your wallet. Please try again later.")
         logger.error(f"Supabase POST error: {response.status_code} - {response.text}")
 
 
@@ -144,9 +144,9 @@ async def unlink_wallet_command(update: Update, context: CallbackContext):
         response = await client.delete(url, headers=supabase_headers)
 
     if response.status_code in [200, 204]:
-         update.message.reply_text("✅ Your wallet has been unlinked.")
+        await update.message.reply_text("✅ Your wallet has been unlinked.")
     else:
-        update.message.reply_text("❌ Could not unlink your wallet. Perhaps you haven't linked one yet?")
+        await update.message.reply_text("❌ Could not unlink your wallet. Perhaps you haven't linked one yet?")
 
 
 async def verify_key_command(update: Update, context: CallbackContext):
@@ -155,20 +155,20 @@ async def verify_key_command(update: Update, context: CallbackContext):
     wallet_address = await get_linked_wallet(telegram_id)
 
     if not wallet_address:
-        update.message.reply_text("You need to link a wallet first with `/linkEwallet YOUR_WALLET`.")
+        await update.message.reply_text("You need to link a wallet first with `/linkEwallet YOUR_WALLET`.")
         return
 
     has_nft = await check_wax_wallet_for_nft(wallet_address)
     if has_nft:
-        update.message.reply_text("✅ YEP YOU READY FOR HODL WARS! 🔥\n\nUse /snakerun or /emojipunks to play!")
+        await update.message.reply_text("✅ YEP YOU READY FOR HODL WARS! 🔥\n\nUse /snakerun or /emojipunks to play!")
     else:
-        update.message.reply_text(f"❌ Verification failed. The linked wallet `{wallet_address}` does not have a Game Key NFT.\n\nGet one here: {MARKET_URL}")
+        await update.message.reply_text(f"❌ Verification failed. The linked wallet `{wallet_address}` does not have a Game Key NFT.\n\nGet one here: {MARKET_URL}")
 
 async def snakerun_command(update: Update, context: CallbackContext):
-    update.message.reply_text(f"🐍 Play Snake Run: {SNAKERUN_URL}")
+    await update.message.reply_text(f"🐍 Play Snake Run: {SNAKERUN_URL}")
 
 async def emojipunks_command(update: Update, context: CallbackContext):
-    update.message.reply_text(f"👾 Play Emoji Punks: {EMOJIPUNKS_URL}")
+    await update.message.reply_text(f"👾 Play Emoji Punks: {EMOJIPUNKS_URL}")
 
 # --- MAIN BOT SETUP ---
 def main():
@@ -197,10 +197,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-```
-
-
-
-
-
-
