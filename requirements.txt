@@ -1,6 +1,6 @@
 python-telegram-bot==20.0a2
-uvicorn
-nest_asyncio
-aiosqlite
-aiohttp
-APScheduler
+nest_asyncio==1.6.0
+aiosqlite==0.21.0
+aiohttp==3.12.15
+APScheduler==3.11.0
+httpx==0.23.3
