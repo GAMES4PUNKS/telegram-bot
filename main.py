@@ -1,115 +1,125 @@
-import os
-import asyncio
 import logging
+import os
 import psycopg2
-from psycopg2.extras import RealDictCursor
-from telegram import Update, ChatMember
-from telegram.ext import (
-    ApplicationBuilder,
-    ContextTypes,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ChatMemberHandler
-)
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
+from dotenv import load_dotenv
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-DATABASE_URL = os.getenv("DATABASE_URL")
+load_dotenv()
 
-GAME_KEY_TEMPLATES = [
-    "898303",  # GAME-KEY-ROYALE
-    "895159",  # GK3008-Game-Key
-    "898306"   # GAME-KEY-BATTLE-ROYALE
-]
+# Setup logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# Database Connection
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        port=5432
+    )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Yo! I'm GK Games Bot — type /status to check server!")
+# Command Handlers
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("Welcome to GK Games4PUNKS Bot!")
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def status(update: Update, context: CallbackContext) -> None:
     telegram_id = update.effective_user.id
     conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
-        wallet = cur.fetchone()
+    cur = conn.cursor()
 
-    # Simulate AtomicHub API check (replace with actual WAX query)
-    owns_game_key = False  # Default False, replace with real API logic.
-    if wallet:
-        # Example: add your API ownership logic here.
-        owns_game_key = True  # TEMP: Assume wallet is valid for now.
+    cur.execute("SELECT verified FROM verified_users WHERE telegram_id = %s", (telegram_id,))
+    result = cur.fetchone()
 
-    if owns_game_key:
-        await update.message.reply_text("GAME SERVER IS LIVE WHAT YOU WAITING FOR")
+    if result and result[0]:
+        update.message.reply_text("GAME SERVER IS LIVE WHAT YOU WAITING FOR")
     else:
-        await update.message.reply_text("Yes GK Games4PUNKS Studio is LIVE, purchase 1 of 3 available Game Key NFTs to play games: https://neftyblocks.com/collection/games4punks1/drops")
+        update.message.reply_text("Yes GK Games4PUNKS Studio is LIVE, purchase a Game Key NFT to play games: https://neftyblocks.com/collection/games4punks1/drops")
 
-async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cur.close()
+    conn.close()
+
+def link_ewallet(update: Update, context: CallbackContext) -> None:
     if len(context.args) != 1:
-        await update.message.reply_text("Usage: /linkEwallet <your_wax_wallet>")
+        update.message.reply_text("Usage: /linkEwallet <your_wallet_address>")
         return
 
     wallet = context.args[0]
     telegram_id = update.effective_user.id
     conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO linked_wallets (telegram_id, wallet)
-            VALUES (%s, %s)
-            ON CONFLICT (telegram_id) DO UPDATE SET wallet = EXCLUDED.wallet
-        """, (telegram_id, wallet))
-        conn.commit()
+    cur = conn.cursor()
 
-    await update.message.reply_text(f"Wallet {wallet} linked successfully!")
+    cur.execute("INSERT INTO linked_wallets (telegram_id, wallet) VALUES (%s, %s) ON CONFLICT (telegram_id) DO UPDATE SET wallet = %s", (telegram_id, wallet, wallet))
+    conn.commit()
 
-async def unlink_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    update.message.reply_text(f"Wallet {wallet} linked successfully!")
+
+    cur.close()
+    conn.close()
+
+def unlink_ewallet(update: Update, context: CallbackContext) -> None:
     telegram_id = update.effective_user.id
     conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
-        conn.commit()
-    await update.message.reply_text("Wallet unlinked.")
+    cur = conn.cursor()
 
-async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # This is a placeholder for actual NFT check logic
-    await update.message.reply_text("YEP YOU READY FOR HODL WARS ⚔️⚔️⚔️")
+    cur.execute("DELETE FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
+    conn.commit()
 
-async def snake_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Play SnakeRun: https://hodlkong64.github.io/snakerun/")
+    update.message.reply_text("Your wallet has been unlinked.")
 
-async def emoji_punks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Play Emojipunks: https://games4punks.github.io/emojisinvade/")
+    cur.close()
+    conn.close()
 
-async def welcome_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    for member in update.chat_member.new_chat_members:
-        await context.bot.send_message(
-            chat_id=update.chat_member.chat.id,
-            text=(
-                f"Welcome {member.full_name}! 🎮\n"
-                "To play GK Web3 games & earn FREE NFTs, you must own a GK Game Key NFT.\n"
-                "Get yours here: https://neftyblocks.com/collection/games4punks1/drops"
-            )
+def verify_ekey(update: Update, context: CallbackContext) -> None:
+    telegram_id = update.effective_user.id
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("UPDATE verified_users SET verified = TRUE WHERE telegram_id = %s", (telegram_id,))
+    conn.commit()
+
+    update.message.reply_text("YEP YOU READY FOR HODL WARS ⚔️⚔️⚔️")
+
+    cur.close()
+    conn.close()
+
+def snakerun(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("Play SnakeRun: https://hodlkong64.github.io/snakerun/")
+
+def emojipunks(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("Play EmojiPunks: https://games4punks.github.io/emojisinvade/")
+
+def welcome_new_member(update: Update, context: CallbackContext) -> None:
+    for member in update.message.new_chat_members:
+        update.message.reply_text(
+            f"Welcome {member.full_name}! To play Web3 GK games & earn FREE NFTs, own a GK Game Key NFT: https://neftyblocks.com/collection/games4punks1/drops"
         )
 
 def main():
-    logging.basicConfig(level=logging.INFO)
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    updater = Updater(os.getenv("BOT_TOKEN"), use_context=True)
+    dp = updater.dispatcher
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("linkEwallet", link_wallet))
-    application.add_handler(CommandHandler("unlinkEwallet", unlink_wallet))
-    application.add_handler(CommandHandler("verifyEkey", verify_ekey))
-    application.add_handler(CommandHandler("snakerun", snake_run))
-    application.add_handler(CommandHandler("emojipunks", emoji_punks))
-    application.add_handler(ChatMemberHandler(welcome_message, ChatMemberHandler.CHAT_MEMBER))
+    # Command Handlers
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("status", status))
+    dp.add_handler(CommandHandler("linkEwallet", link_ewallet))
+    dp.add_handler(CommandHandler("unlinkEwallet", unlink_ewallet))
+    dp.add_handler(CommandHandler("verifyEkey", verify_ekey))
+    dp.add_handler(CommandHandler("snakerun", snakerun))
+    dp.add_handler(CommandHandler("emojipunks", emojipunks))
 
-    application.run_polling()
+    # Welcome Handler
+    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome_new_member))
 
-if __name__ == "__main__":
+    # Start the Bot
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
     main()
+
 
 
 
