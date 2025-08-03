@@ -1,119 +1,119 @@
-import logging
 import os
+import logging
 import psycopg2
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Setup logging
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Set up logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database Connection
+# PostgreSQL Connection
+
 def get_db_connection():
-    return psycopg2.connect(
-        host=os.getenv("DB_HOST"),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        port=5432
-    )
+    return psycopg2.connect(DATABASE_URL)
+
+# Database Functions
+
+def link_wallet_db(telegram_id, wallet):
+    conn = get_db_connection()
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO linked_wallets (telegram_id, wallet)
+                VALUES (%s, %s)
+                ON CONFLICT (telegram_id) DO UPDATE SET wallet = EXCLUDED.wallet;
+            """, (telegram_id, wallet))
+    conn.close()
+
+def unlink_wallet_db(telegram_id):
+    conn = get_db_connection()
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
+    conn.close()
+
+def is_wallet_linked(telegram_id):
+    conn = get_db_connection()
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT wallet FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
+            result = cur.fetchone()
+    conn.close()
+    return result is not None
 
 # Command Handlers
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("Welcome to GK Games4PUNKS Bot!")
 
-def status(update: Update, context: CallbackContext) -> None:
-    telegram_id = update.effective_user.id
-    conn = get_db_connection()
-    cur = conn.cursor()
+def start(update: Update, context: CallbackContext):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    lang = user.language_code
 
-    cur.execute("SELECT verified FROM verified_users WHERE telegram_id = %s", (telegram_id,))
-    result = cur.fetchone()
+    message = (
+        "\U0001F525 Welcome to GKniftyHEADS! \U0001F525\n\n"
+        "Want to play Web3 GK games & earn FREE NFTs?\n"
+        "\nYou need a GK Game Key NFT.\n"
+        "\nGrab yours here: https://neftyblocks.com/collection/games4punks1/drops"
+    )
 
-    if result and result[0]:
-        update.message.reply_text("GAME SERVER IS LIVE WHAT YOU WAITING FOR")
+    context.bot.send_message(chat_id=chat_id, text=message)
+
+def status(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+
+    if is_wallet_linked(user_id):
+        update.message.reply_text("\U0001F3AE GAME SERVER IS LIVE WHAT YOU WAITING FOR")
     else:
-        update.message.reply_text("Yes GK Games4PUNKS Studio is LIVE, purchase a Game Key NFT to play games: https://neftyblocks.com/collection/games4punks1/drops")
-
-    cur.close()
-    conn.close()
-
-def link_ewallet(update: Update, context: CallbackContext) -> None:
-    if len(context.args) != 1:
-        update.message.reply_text("Usage: /linkEwallet <your_wallet_address>")
-        return
-
-    wallet = context.args[0]
-    telegram_id = update.effective_user.id
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("INSERT INTO linked_wallets (telegram_id, wallet) VALUES (%s, %s) ON CONFLICT (telegram_id) DO UPDATE SET wallet = %s", (telegram_id, wallet, wallet))
-    conn.commit()
-
-    update.message.reply_text(f"Wallet {wallet} linked successfully!")
-
-    cur.close()
-    conn.close()
-
-def unlink_ewallet(update: Update, context: CallbackContext) -> None:
-    telegram_id = update.effective_user.id
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM linked_wallets WHERE telegram_id = %s", (telegram_id,))
-    conn.commit()
-
-    update.message.reply_text("Your wallet has been unlinked.")
-
-    cur.close()
-    conn.close()
-
-def verify_ekey(update: Update, context: CallbackContext) -> None:
-    telegram_id = update.effective_user.id
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("UPDATE verified_users SET verified = TRUE WHERE telegram_id = %s", (telegram_id,))
-    conn.commit()
-
-    update.message.reply_text("YEP YOU READY FOR HODL WARS ⚔️⚔️⚔️")
-
-    cur.close()
-    conn.close()
-
-def snakerun(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("Play SnakeRun: https://hodlkong64.github.io/snakerun/")
-
-def emojipunks(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("Play EmojiPunks: https://games4punks.github.io/emojisinvade/")
-
-def welcome_new_member(update: Update, context: CallbackContext) -> None:
-    for member in update.message.new_chat_members:
         update.message.reply_text(
-            f"Welcome {member.full_name}! To play Web3 GK games & earn FREE NFTs, own a GK Game Key NFT: https://neftyblocks.com/collection/games4punks1/drops"
+            "\U0001F4BB Yes GK Games4PUNKS Studio is LIVE, purchase 1 of 3 available Game Key NFTs to play games: https://neftyblocks.com/collection/games4punks1/drops"
         )
 
+def linkEwallet(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    args = context.args
+
+    if not args:
+        update.message.reply_text("Please provide your WAX wallet address. Usage: /linkEwallet YOURWALLET")
+        return
+
+    wallet = args[0]
+    link_wallet_db(user_id, wallet)
+    update.message.reply_text(f"Wallet {wallet} linked successfully!")
+
+def unlinkEwallet(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    unlink_wallet_db(user_id)
+    update.message.reply_text("Your wallet has been unlinked.")
+
+def verifyEkey(update: Update, context: CallbackContext):
+    # Placeholder: This should call AtomicHub API to verify NFT ownership.
+    # Simulated response:
+    update.message.reply_text("\U0001F4AA YEP YOU READY FOR HODL WARS ")
+
+def snakerun(update: Update, context: CallbackContext):
+    update.message.reply_text("Play Snake Run: https://hodlkong64.github.io/snakerun/")
+
+def emojipunks(update: Update, context: CallbackContext):
+    update.message.reply_text("Play Emoji Punks: https://games4punks.github.io/emojisinvade/")
+
 def main():
-    updater = Updater(os.getenv("BOT_TOKEN"), use_context=True)
-    dp = updater.dispatcher
+    updater = Updater(BOT_TOKEN)
+    dispatcher = updater.dispatcher
 
-    # Command Handlers
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("status", status))
-    dp.add_handler(CommandHandler("linkEwallet", link_ewallet))
-    dp.add_handler(CommandHandler("unlinkEwallet", unlink_ewallet))
-    dp.add_handler(CommandHandler("verifyEkey", verify_ekey))
-    dp.add_handler(CommandHandler("snakerun", snakerun))
-    dp.add_handler(CommandHandler("emojipunks", emojipunks))
+    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, start))
+    dispatcher.add_handler(CommandHandler("status", status))
+    dispatcher.add_handler(CommandHandler("linkEwallet", linkEwallet))
+    dispatcher.add_handler(CommandHandler("unlinkEwallet", unlinkEwallet))
+    dispatcher.add_handler(CommandHandler("verifyEkey", verifyEkey))
+    dispatcher.add_handler(CommandHandler("snakerun", snakerun))
+    dispatcher.add_handler(CommandHandler("emojipunks", emojipunks))
 
-    # Welcome Handler
-    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome_new_member))
-
-    # Start the Bot
     updater.start_polling()
     updater.idle()
 
