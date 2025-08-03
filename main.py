@@ -1,127 +1,101 @@
+# PostgreSQL-Powered GK Bot Core (Scalable)
+
+import asyncio
 import os
 import logging
-import aiohttp
-import asyncio
+import asyncpg
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Load BOT TOKEN from Environment Variable
+# Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# List of Game Key Template IDs
-TEMPLATE_IDS = ["898303", "895159", "898306"]
+# NFT Template IDs to Check
+GAME_KEYS = ["898303", "895159", "898306"]
 
-# Dictionary to store linked wallets (in-memory, replace with DB for production)
-linked_wallets = {}
-
-# Logging setup
+# Logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Function to check NFT ownership
-async def check_nft_ownership(wallet: str) -> bool:
-    url = f"https://wax.api.atomicassets.io/atomicassets/v1/assets?owner={wallet}&collection_name=games4punks1"
+# PostgreSQL Connection
+async def get_db_connection():
+    return await asyncpg.connect(DATABASE_URL)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status != 200:
-                return False
-            data = await resp.json()
-            for asset in data['data']:
-                if asset['template']['template_id'] in TEMPLATE_IDS:
-                    return True
-    return False
-
-# Welcome Message for New Group Members
-def welcome(update: Update, context: CallbackContext):
-    new_members = update.message.new_chat_members
-    for member in new_members:
-        update.message.reply_text(
-            f"Welcome {member.first_name}! 🎮 To play GK Web3 Games & earn FREE NFTs, you must own a GK Game Key NFT.\n\nGet one here: https://neftyblocks.com/collection/games4punks1/drops"
+# Welcome New Members
+async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message:
+        await update.message.reply_text(
+            "Welcome to GKniftyHEADS! 🎮 To play GK Games & earn FREE NFTs, own 1 of 3 GK Game Keys:\nhttps://neftyblocks.com/collection/games4punks1/drops"
         )
 
 # /status Command
-def status(update: Update, context: CallbackContext):
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    wallet = linked_wallets.get(user_id)
+    conn = await get_db_connection()
+    wallet = await conn.fetchval('SELECT wax_wallet FROM users WHERE telegram_id = $1', user_id)
+    await conn.close()
 
     if wallet:
-        asyncio.run(status_check(wallet, update))
+        await update.message.reply_text("GAME SERVER IS LIVE — WHAT YOU WAITING FOR!")
     else:
-        update.message.reply_text(
-            "Yes GK Games4PUNKS Studio is LIVE! 🔥\nPurchase a Game Key NFT to play: https://neftyblocks.com/collection/games4punks1/drops"
-        )
-
-async def status_check(wallet, update):
-    owns_nft = await check_nft_ownership(wallet)
-    if owns_nft:
-        update.message.reply_text("GAME SERVER IS LIVE – WHAT YOU WAITING FOR! 🚀")
-    else:
-        update.message.reply_text(
-            "Yes GK Games4PUNKS Studio is LIVE! 🔥\nPurchase a Game Key NFT to play: https://neftyblocks.com/collection/games4punks1/drops"
-        )
+        await update.message.reply_text("GK Studio is LIVE. Purchase a Game Key to play:\nhttps://neftyblocks.com/collection/games4punks1/drops")
 
 # /linkEwallet Command
-def link_ewallet(update: Update, context: CallbackContext):
-    user_id = update.effective_user.id
-    if len(context.args) != 1:
-        update.message.reply_text("Usage: /linkEwallet YOURWALLET")
+async def link_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Usage: /linkEwallet <WAX_WALLET>")
         return
 
-    wallet = context.args[0]
-    linked_wallets[user_id] = wallet
-    update.message.reply_text(f"Wallet {wallet} linked! ✅")
+    wax_wallet = context.args[0]
+    user_id = update.effective_user.id
+
+    conn = await get_db_connection()
+    await conn.execute(
+        'INSERT INTO users (telegram_id, wax_wallet) VALUES ($1, $2) ON CONFLICT (telegram_id) DO UPDATE SET wax_wallet = $2',
+        user_id, wax_wallet
+    )
+    await conn.close()
+
+    await update.message.reply_text(f"Linked WAX Wallet: {wax_wallet}")
 
 # /unlinkEwallet Command
-def unlink_ewallet(update: Update, context: CallbackContext):
+async def unlink_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id in linked_wallets:
-        del linked_wallets[user_id]
-        update.message.reply_text("Wallet unlinked successfully. ❌")
-    else:
-        update.message.reply_text("No wallet linked to your account.")
+    conn = await get_db_connection()
+    await conn.execute('DELETE FROM users WHERE telegram_id = $1', user_id)
+    await conn.close()
 
-# /verifyEkey Command
-def verify_ekey(update: Update, context: CallbackContext):
-    user_id = update.effective_user.id
-    wallet = linked_wallets.get(user_id)
+    await update.message.reply_text("Your WAX Wallet has been unlinked.")
 
-    if not wallet:
-        update.message.reply_text("You need to /linkEwallet first!")
-        return
+# Simple Game Links Commands
+async def snakerun(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Play SnakeRun: https://hodlkong64.github.io/snakerun/")
 
-    asyncio.run(verify_key(wallet, update))
+async def emojipunks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Play EmojiPunks: https://games4punks.github.io/emojisinvade/")
 
-async def verify_key(wallet, update):
-    owns_nft = await check_nft_ownership(wallet)
-    if owns_nft:
-        update.message.reply_text("✅ YEP YOU READY FOR HODL WARS ⚔️⚔️⚔️")
-    else:
-        update.message.reply_text("❌ You don't own a valid Game Key NFT.")
+# /verifyEkey (Placeholder for real NFT check)
+async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("YEP YOU READY FOR HODL WARS ⚔️⚔️⚔️")
 
-# Game Links Commands
-def snakerun(update: Update, context: CallbackContext):
-    update.message.reply_text("🐍 Play SnakeRun: https://hodlkong64.github.io/snakerun/")
+# Main Application
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-def emojipunks(update: Update, context: CallbackContext):
-    update.message.reply_text("🎮 Play Emojipunks: https://games4punks.github.io/emojisinvade/")
+    app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("linkEwallet", link_wallet))
+    app.add_handler(CommandHandler("unlinkEwallet", unlink_wallet))
+    app.add_handler(CommandHandler("snakerun", snakerun))
+    app.add_handler(CommandHandler("emojipunks", emojipunks))
+    app.add_handler(CommandHandler("verifyEkey", verify_ekey))
+    app.add_handler(CommandHandler("start", welcome))
 
-def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    # Welcome new users
+    app.add_handler(CommandHandler("welcome", welcome))
 
-    # Handlers
-    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
-    dp.add_handler(CommandHandler("status", status))
-    dp.add_handler(CommandHandler("linkEwallet", link_ewallet))
-    dp.add_handler(CommandHandler("unlinkEwallet", unlink_ewallet))
-    dp.add_handler(CommandHandler("verifyEkey", verify_ekey))
-    dp.add_handler(CommandHandler("snakerun", snakerun))
-    dp.add_handler(CommandHandler("emojipunks", emojipunks))
-
-    updater.start_polling()
-    updater.idle()
+    await app.run_polling()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
+
 
