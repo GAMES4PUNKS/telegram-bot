@@ -2,64 +2,51 @@ import os
 import asyncio
 from fastapi import FastAPI
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import nest_asyncio
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Force asyncio to allow nested loops (Render)
+nest_asyncio.apply()
 
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN is not set. Check your Render environment variables.")
+# Get BOT TOKEN from Environment Variables
+BOT_TOKEN = os.getenv("BOT_TOKEN", "false")
 
+if BOT_TOKEN == "false":
+    raise ValueError("BOT_TOKEN environment variable not set in Render Dashboard.")
+
+# FastAPI App (dummy endpoint for Render healthcheck)
 app = FastAPI()
 
-# --- Telegram Bot Logic ---
-async def bot_startup() -> None:
-    print("Starting GK3008BOT...")
+@app.get("/")
+async def root():
+    return {"status": "Bot is running"}
 
+# Command Handlers
+async def link_ewallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Please send me your WAX wallet address to link.")
+
+async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Verifying your GK3008 Game Key NFT...")
+
+async def plae(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Here is your game link: https://emojisinvade.games4punks.io")
+
+# Polling Loop Function
+async def run_bot():
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Welcome Message Handler
-    async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text(
-            "👾 Welcome to GK3008BOT!\n\n"
-            "🎮 Available Games:\n"
-            "- Emojis Invade\n"
-            "- Spacerun3008\n"
-            "- More coming soon!\n\n"
-            "🔑 Commands:\n"
-            "/linkEwallet - Link your WAX Wallet\n"
-            "/verifyEkey - Verify your Game Key NFT\n"
-            "/plaE - Play Emojis Invade\n"
-            "\nLet’s Go, Punk!"
-        )
-
-    # Command: /linkEwallet
-    async def link_ewallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text("🔗 Please send your WAX wallet address to link it.")
-
-    # Command: /verifyEkey
-    async def verify_ekey(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text("🔍 Verifying your Game Key NFT... (WIP logic here)")
-
-    # Command: /plaE
-    async def play_emoji_invade(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text("🎮 Play Emojis Invade here: https://games4punks.github.io/emojisinvade/")
-
-    # Register Commands
-    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
     application.add_handler(CommandHandler("linkEwallet", link_ewallet))
     application.add_handler(CommandHandler("verifyEkey", verify_ekey))
-    application.add_handler(CommandHandler("plaE", play_emoji_invade))
+    application.add_handler(CommandHandler("plaE", plae))
 
-    # Start Bot
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    await application.idle()
+    # Start polling forever
+    await application.run_polling()
 
-# FastAPI Startup Event
+# Startup Event
 @app.on_event("startup")
-async def on_startup():
-    asyncio.create_task(bot_startup())
+async def startup_event():
+    asyncio.create_task(run_bot())
+
 
 
 
