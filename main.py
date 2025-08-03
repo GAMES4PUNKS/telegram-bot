@@ -1,8 +1,9 @@
 import os
 import logging
 import psycopg2
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from flask import Flask, request
+from telegram import Update, Bot
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters, CallbackContext
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,13 +15,16 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# PostgreSQL Connection
+# Flask App
+app = Flask(__name__)
+bot = Bot(token=BOT_TOKEN)
+dispatcher = Dispatcher(bot, None, workers=4, use_context=True)
 
+# PostgreSQL Connection
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
 # Database Functions
-
 def link_wallet_db(telegram_id, wallet):
     conn = get_db_connection()
     with conn:
@@ -49,11 +53,9 @@ def is_wallet_linked(telegram_id):
     return result is not None
 
 # Command Handlers
-
 def start(update: Update, context: CallbackContext):
     user = update.effective_user
     chat_id = update.effective_chat.id
-    lang = user.language_code
 
     message = (
         "\U0001F525 Welcome to GKniftyHEADS! \U0001F525\n\n"
@@ -92,8 +94,6 @@ def unlinkEwallet(update: Update, context: CallbackContext):
     update.message.reply_text("Your wallet has been unlinked.")
 
 def verifyEkey(update: Update, context: CallbackContext):
-    # Placeholder: This should call AtomicHub API to verify NFT ownership.
-    # Simulated response:
     update.message.reply_text("\U0001F4AA YEP YOU READY FOR HODL WARS ")
 
 def snakerun(update: Update, context: CallbackContext):
@@ -102,23 +102,25 @@ def snakerun(update: Update, context: CallbackContext):
 def emojipunks(update: Update, context: CallbackContext):
     update.message.reply_text("Play Emoji Punks: https://games4punks.github.io/emojisinvade/")
 
-def main():
-    updater = Updater(BOT_TOKEN)
-    dispatcher = updater.dispatcher
+# Webhook Endpoint
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return 'ok'
 
-    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, start))
-    dispatcher.add_handler(CommandHandler("status", status))
-    dispatcher.add_handler(CommandHandler("linkEwallet", linkEwallet))
-    dispatcher.add_handler(CommandHandler("unlinkEwallet", unlinkEwallet))
-    dispatcher.add_handler(CommandHandler("verifyEkey", verifyEkey))
-    dispatcher.add_handler(CommandHandler("snakerun", snakerun))
-    dispatcher.add_handler(CommandHandler("emojipunks", emojipunks))
-
-    updater.start_polling()
-    updater.idle()
+# Register Handlers
+dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, start))
+dispatcher.add_handler(CommandHandler("status", status))
+dispatcher.add_handler(CommandHandler("linkEwallet", linkEwallet))
+dispatcher.add_handler(CommandHandler("unlinkEwallet", unlinkEwallet))
+dispatcher.add_handler(CommandHandler("verifyEkey", verifyEkey))
+dispatcher.add_handler(CommandHandler("snakerun", snakerun))
+dispatcher.add_handler(CommandHandler("emojipunks", emojipunks))
 
 if __name__ == '__main__':
-    main()
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
 
 
 
