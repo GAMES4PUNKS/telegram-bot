@@ -43,6 +43,7 @@ pending_command = {}
 # --- CUSTOM FILTER FOR CAPTCHA ANSWERS ---
 class CaptchaAnswerFilter(MessageFilter):
     def filter(self, message):
+        # Only pay attention to messages from users who are in the pending_captcha dictionary
         return message.from_user.id in pending_captcha
 
 # --- HELPER FUNCTIONS ---
@@ -105,6 +106,7 @@ def helpme_command(update: Update, context: CallbackContext):
     context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
+
     help_text = (
         "Welcome! Here's how to use the bot:\n\n"
         "1️⃣ **Start by verifying you are human.** Send any command and I'll give you a simple math problem to solve.\n\n"
@@ -126,9 +128,11 @@ def status_command(update: Update, context: CallbackContext):
     initial_message = context.bot.send_message(
         chat_id=update.effective_chat.id, text="⏳ Checking your status..."
     )
+
     telegram_id = update.effective_user.id
     wallet_address = get_linked_wallet(telegram_id)
     final_text = ""
+
     if not wallet_address:
         final_text = (
             f"❌ You haven't linked a wallet yet!\n"
@@ -141,6 +145,7 @@ def status_command(update: Update, context: CallbackContext):
             final_text = "✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use `/verifyEkey` to confirm and play!"
         else:
             final_text = f"❌ Your linked wallet `{wallet_address}` does not hold a Game Key NFT.\n\nPurchase one here: {MARKET_URL}"
+
     context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
@@ -159,6 +164,7 @@ def link_wallet_command(update: Update, context: CallbackContext):
             "Please provide your WAX wallet address. Usage: /linkEwallet YOUR_WALLET"
         )
         return
+
     initial_message = context.bot.send_message(
         chat_id=update.effective_chat.id, text="🔗 Linking your wallet..."
     )
@@ -168,6 +174,7 @@ def link_wallet_command(update: Update, context: CallbackContext):
     payload = {"telegram_id": telegram_id, "wallet": wallet}
     params = {"on_conflict": "telegram_id"}
     final_text = ""
+
     try:
         response = httpx.post(url, headers=supabase_headers, json=payload, params=params)
         if response.status_code in [200, 201, 204]:
@@ -180,6 +187,7 @@ def link_wallet_command(update: Update, context: CallbackContext):
     except httpx.RequestError as e:
         final_text = "❌ Could not connect to the database. Please try again later."
         logger.error(f"Supabase POST request failed: {e}")
+
     context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
@@ -194,6 +202,7 @@ def unlink_wallet_command(update: Update, context: CallbackContext):
     telegram_id = update.effective_user.id
     url = f"{SUPABASE_URL}/rest/v1/linked_wallets?telegram_id=eq.{telegram_id}"
     final_text = ""
+
     try:
         response = httpx.delete(url, headers=supabase_headers)
         if response.status_code in [200, 204]:
@@ -205,6 +214,7 @@ def unlink_wallet_command(update: Update, context: CallbackContext):
     except httpx.RequestError as e:
         final_text = "❌ Could not connect to the database. Please try again later."
         logger.error(f"Supabase DELETE request failed: {e}")
+
     context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
@@ -219,6 +229,7 @@ def verify_key_command(update: Update, context: CallbackContext):
     telegram_id = update.effective_user.id
     wallet_address = get_linked_wallet(telegram_id)
     final_text = ""
+
     if not wallet_address:
         final_text = "You need to link a wallet first with `/linkEwallet YOUR_WALLET`."
     else:
@@ -229,6 +240,7 @@ def verify_key_command(update: Update, context: CallbackContext):
             )
         else:
             final_text = f"❌ Verification failed. The linked wallet `{wallet_address}` does not have a Game Key NFT.\n\nGet one here: {MARKET_URL}"
+
     context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
@@ -258,6 +270,7 @@ def universal_handler(update: Update, context: CallbackContext):
                 f"Please solve the math problem before using another command!\n\n{captcha_question}"
             )
             return
+
         try:
             user_answer = int(message_text)
             correct_answer = pending_captcha[user_id]
@@ -265,6 +278,7 @@ def universal_handler(update: Update, context: CallbackContext):
                 verified_users.add(user_id)
                 del pending_captcha[user_id]
                 msg = update.message.reply_text("✅ Correct! You are now verified.")
+
                 if user_id in pending_command:
                     context.bot.delete_message(
                         chat_id=msg.chat_id, message_id=msg.message_id
@@ -347,10 +361,12 @@ def main():
 
     logger.info("Bot is starting up in webhook mode...")
     
+    # The RAILWAY_STATIC_URL is provided by Railway automatically after generating a domain
+    webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}/{BOT_TOKEN}"
     updater.start_webhook(listen="0.0.0.0",
                           port=PORT,
                           url_path=BOT_TOKEN,
-                          webhook_url=f"https://{os.environ.get('RAILWAY_STATIC_URL')}/{BOT_TOKEN}")
+                          webhook_url=webhook_url)
 
     updater.idle()
 
