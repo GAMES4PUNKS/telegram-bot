@@ -168,6 +168,12 @@ def universal_handler(update: Update, context: CallbackContext):
 
     # 1. If user is trying to solve a captcha
     if user_id in pending_captcha:
+        # NEW: Check if the user sent another command instead of the answer.
+        if message_text.startswith('/'):
+            captcha_question = generate_captcha(user_id) # Generate a new problem
+            update.message.reply_text(f"Please solve the math problem before using another command!\n\n{captcha_question}")
+            return # Stop processing here
+
         try:
             user_answer = int(message_text)
             correct_answer = pending_captcha[user_id]
