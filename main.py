@@ -2,9 +2,10 @@ import os
 import logging
 import httpx
 import random
+import asyncio
 from telegram import Update
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     MessageHandler,
     Filters,
@@ -43,7 +44,6 @@ pending_command = {}
 # --- CUSTOM FILTER FOR CAPTCHA ANSWERS ---
 class CaptchaAnswerFilter(MessageFilter):
     def filter(self, message):
-        # Only pay attention to messages from users who are in the pending_captcha dictionary
         return message.from_user.id in pending_captcha
 
 # --- HELPER FUNCTIONS ---
@@ -94,19 +94,18 @@ def get_linked_wallet(telegram_id: int) -> str | None:
         logger.error(f"Supabase GET request failed: {e}")
     return None
 
-# --- BOT COMMAND HANDLERS ---
-def welcome_new_member(update: Update, context: CallbackContext):
+# --- BOT COMMAND HANDLERS (MUST be async for the new library version) ---
+async def welcome_new_member(update: Update, context: CallbackContext):
     message = (
         "🔥 Welcome to GKniftyHEADS! 🔥\n\n"
         "To get started, send `/helpme` to see how to use the bot."
     )
-    update.message.reply_text(message)
+    await update.message.reply_text(message)
 
-def helpme_command(update: Update, context: CallbackContext):
-    context.bot.delete_message(
+async def helpme_command(update: Update, context: CallbackContext):
+    await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
-
     help_text = (
         "Welcome! Here's how to use the bot:\n\n"
         "1️⃣ **Start by verifying you are human.** Send any command and I'll give you a simple math problem to solve.\n\n"
@@ -119,20 +118,18 @@ def helpme_command(update: Update, context: CallbackContext):
         "• `/emojipunks` - Get the link to play Emoji Punks.\n"
         "• `/helpme` - Show this message again."
     )
-    update.message.reply_text(help_text)
+    await update.message.reply_text(help_text)
 
-def status_command(update: Update, context: CallbackContext):
-    context.bot.delete_message(
+async def status_command(update: Update, context: CallbackContext):
+    await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
-    initial_message = context.bot.send_message(
+    initial_message = await context.bot.send_message(
         chat_id=update.effective_chat.id, text="⏳ Checking your status..."
     )
-
     telegram_id = update.effective_user.id
     wallet_address = get_linked_wallet(telegram_id)
     final_text = ""
-
     if not wallet_address:
         final_text = (
             f"❌ You haven't linked a wallet yet!\n"
@@ -145,27 +142,25 @@ def status_command(update: Update, context: CallbackContext):
             final_text = "✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use `/verifyEkey` to confirm and play!"
         else:
             final_text = f"❌ Your linked wallet `{wallet_address}` does not hold a Game Key NFT.\n\nPurchase one here: {MARKET_URL}"
-
-    context.bot.edit_message_text(
+    await context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-def link_wallet_command(update: Update, context: CallbackContext):
-    context.bot.delete_message(
+async def link_wallet_command(update: Update, context: CallbackContext):
+    await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
     if update.message.chat.type != "private":
-        update.message.reply_text(
+        await update.message.reply_text(
             "For your security, please use this command in a private message with me."
         )
         return
     if not context.args:
-        update.message.reply_text(
+        await update.message.reply_text(
             "Please provide your WAX wallet address. Usage: /linkEwallet YOUR_WALLET"
         )
         return
-
-    initial_message = context.bot.send_message(
+    initial_message = await context.bot.send_message(
         chat_id=update.effective_chat.id, text="🔗 Linking your wallet..."
     )
     telegram_id = update.effective_user.id
@@ -174,7 +169,6 @@ def link_wallet_command(update: Update, context: CallbackContext):
     payload = {"telegram_id": telegram_id, "wallet": wallet}
     params = {"on_conflict": "telegram_id"}
     final_text = ""
-
     try:
         response = httpx.post(url, headers=supabase_headers, json=payload, params=params)
         if response.status_code in [200, 201, 204]:
@@ -187,22 +181,20 @@ def link_wallet_command(update: Update, context: CallbackContext):
     except httpx.RequestError as e:
         final_text = "❌ Could not connect to the database. Please try again later."
         logger.error(f"Supabase POST request failed: {e}")
-
-    context.bot.edit_message_text(
+    await context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-def unlink_wallet_command(update: Update, context: CallbackContext):
-    context.bot.delete_message(
+async def unlink_wallet_command(update: Update, context: CallbackContext):
+    await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
-    initial_message = context.bot.send_message(
+    initial_message = await context.bot.send_message(
         chat_id=update.effective_chat.id, text="🗑️ Unlinking your wallet..."
     )
     telegram_id = update.effective_user.id
-    url = f"{SUPABASE_URL}/rest/v1/linked_wallet?telegram_id=eq.{telegram_id}"
+    url = f"{SUPABASE_URL}/rest/v1/linked_wallets?telegram_id=eq.{telegram_id}"
     final_text = ""
-
     try:
         response = httpx.delete(url, headers=supabase_headers)
         if response.status_code in [200, 204]:
@@ -214,22 +206,20 @@ def unlink_wallet_command(update: Update, context: CallbackContext):
     except httpx.RequestError as e:
         final_text = "❌ Could not connect to the database. Please try again later."
         logger.error(f"Supabase DELETE request failed: {e}")
-
-    context.bot.edit_message_text(
+    await context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-def verify_key_command(update: Update, context: CallbackContext):
-    context.bot.delete_message(
+async def verify_key_command(update: Update, context: CallbackContext):
+    await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
-    initial_message = context.bot.send_message(
+    initial_message = await context.bot.send_message(
         chat_id=update.effective_chat.id, text="🔑 Verifying your Game Key..."
     )
     telegram_id = update.effective_user.id
     wallet_address = get_linked_wallet(telegram_id)
     final_text = ""
-
     if not wallet_address:
         final_text = "You need to link a wallet first with `/linkEwallet YOUR_WALLET`."
     else:
@@ -240,25 +230,24 @@ def verify_key_command(update: Update, context: CallbackContext):
             )
         else:
             final_text = f"❌ Verification failed. The linked wallet `{wallet_address}` does not have a Game Key NFT.\n\nGet one here: {MARKET_URL}"
-
-    context.bot.edit_message_text(
+    await context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-def snakerun_command(update: Update, context: CallbackContext):
-    context.bot.delete_message(
+async def snakerun_command(update: Update, context: CallbackContext):
+    await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
-    update.message.reply_text(f"🐍 Play Snake Run: {SNAKERUN_URL}")
+    await update.message.reply_text(f"🐍 Play Snake Run: {SNAKERUN_URL}")
 
-def emojipunks_command(update: Update, context: CallbackContext):
-    context.bot.delete_message(
+async def emojipunks_command(update: Update, context: CallbackContext):
+    await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
-    update.message.reply_text(f"👾 Play Emoji Punks: {EMOJIPUNKS_URL}")
+    await update.message.reply_text(f"👾 Play Emoji Punks: {EMOJIPUNKS_URL}")
 
 # --- UNIVERSAL HANDLER FOR CAPTCHA AND COMMAND ROUTING ---
-def universal_handler(update: Update, context: CallbackContext):
+async def universal_handler(update: Update, context: CallbackContext):
     """Handles all command messages to check for captcha verification before processing."""
     user_id = update.effective_user.id
     message_text = update.message.text
@@ -266,60 +255,58 @@ def universal_handler(update: Update, context: CallbackContext):
     if user_id in pending_captcha:
         if message_text.startswith("/"):
             captcha_question = generate_captcha(user_id)
-            update.message.reply_text(
+            await update.message.reply_text(
                 f"Please solve the math problem before using another command!\n\n{captcha_question}"
             )
             return
-
         try:
             user_answer = int(message_text)
             correct_answer = pending_captcha[user_id]
             if user_answer == correct_answer:
                 verified_users.add(user_id)
                 del pending_captcha[user_id]
-                msg = update.message.reply_text("✅ Correct! You are now verified.")
-
+                msg = await update.message.reply_text("✅ Correct! You are now verified.")
                 if user_id in pending_command:
-                    context.bot.delete_message(
+                    await context.bot.delete_message(
                         chat_id=msg.chat_id, message_id=msg.message_id
                     )
-                    context.bot.delete_message(
+                    await context.bot.delete_message(
                         chat_id=update.message.chat_id,
                         message_id=update.message.message_id,
                     )
                     update.message.text = pending_command[user_id]
-                    universal_handler(update, context)
+                    await universal_handler(update, context)
                     del pending_command[user_id]
             else:
-                update.message.reply_text(
+                await update.message.reply_text(
                     "❌ Incorrect answer. Please try sending a command again to get a new problem."
                 )
                 del pending_captcha[user_id]
         except (ValueError, TypeError):
-            update.message.reply_text("Please enter a valid number as your answer.")
+            await update.message.reply_text("Please enter a valid number as your answer.")
         return
 
     if user_id in verified_users:
         command = message_text.split(" ")[0].lower()
         if command == "/status":
-            return status_command(update, context)
+            await status_command(update, context)
         elif command == "/linkewallet":
-            return link_wallet_command(update, context)
+            await link_wallet_command(update, context)
         elif command == "/unlinkewallet":
-            return unlink_wallet_command(update, context)
+            await unlink_wallet_command(update, context)
         elif command == "/verifyekey":
-            return verify_key_command(update, context)
+            await verify_key_command(update, context)
         elif command == "/snakerun":
-            return snakerun_command(update, context)
+            await snakerun_command(update, context)
         elif command == "/emojipunks":
-            return emojipunks_command(update, context)
+            await emojipunks_command(update, context)
         elif command == "/helpme":
-            return helpme_command(update, context)
+            await helpme_command(update, context)
         else:
-            context.bot.delete_message(
+            await context.bot.delete_message(
                 chat_id=update.message.chat_id, message_id=update.message.message_id
             )
-            update.message.reply_text(
+            await update.message.reply_text(
                 "I didn't understand that command. Use `/helpme` to see the available commands."
             )
         return
@@ -327,45 +314,49 @@ def universal_handler(update: Update, context: CallbackContext):
     if message_text.startswith("/"):
         pending_command[user_id] = message_text
         captcha_question = generate_captcha(user_id)
-        context.bot.delete_message(
+        await context.bot.delete_message(
             chat_id=update.message.chat_id, message_id=update.message.message_id
         )
-        update.message.reply_text(
+        await update.message.reply_text(
             f"Welcome! Before you can use commands, please verify you're a human.\n\n{captcha_question}"
         )
-    # The final 'else' block is removed so the bot ignores non-command messages from new users.
 
-# --- MAIN BOT SETUP (WEBHOOK VERSION) ---
-def main():
+# --- MAIN BOT SETUP (MODERN WEBHOOK VERSION) ---
+async def main():
     """Start the bot in webhook mode."""
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    application = Application.builder().token(BOT_TOKEN).build()
+    
     PORT = int(os.environ.get("PORT", "8443"))
     
     command_list = [
         "status", "linkEwallet", "unlinkEwallet", "verifyEkey",
         "snakerun", "emojipunks", "helpme",
     ]
-    dp.add_handler(CommandHandler(command_list, universal_handler))
-    dp.add_handler(
+    application.add_handler(CommandHandler(command_list, universal_handler))
+    application.add_handler(
         MessageHandler(
-            CaptchaAnswerFilter() & Filters.text & ~Filters.command, universal_handler
+            CaptchaAnswerFilter() & Filters.TEXT & ~Filters.COMMAND, universal_handler
         )
     )
-    dp.add_handler(
-        MessageHandler(Filters.status_update.new_chat_members, welcome_new_member)
+    application.add_handler(
+        MessageHandler(Filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member)
     )
 
-    logger.info("Bot is starting up in webhook mode...")
+    logger.info("Bot is starting up in modern webhook mode...")
     
-    # The RAILWAY_STATIC_URL is provided by Railway automatically after generating a domain
-    webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}/{BOT_TOKEN}"
-    updater.start_webhook(listen="0.0.0.0",
-                          port=PORT,
-                          url_path=BOT_TOKEN,
-                          webhook_url=webhook_url)
+    webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}"
 
-    updater.idle()
+    await application.bot.set_webhook(url=f"{webhook_url}/{BOT_TOKEN}")
+    
+    # This runs the web server that listens for updates from Telegram
+    await application.start(
+        webhook_listen="0.0.0.0",
+        webhook_port=PORT,
+        url_path=BOT_TOKEN,
+    )
+    
+    # This keeps the application running
+    await application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
