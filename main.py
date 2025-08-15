@@ -223,7 +223,7 @@ async def verify_key_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         has_nft = check_wax_wallet_for_nft(wallet_address)
         if has_nft:
             final_text = (
-                "✅ YEP YOU READY FOR HODL WARS! 🔥\n\nUse `/snakerun` or `/emojipunks` to play!"
+                "✅ YEP YOU READY FOR HODL WARS YO! 🔥\n\nUse `/snakerun` or `/emojipunks` to play!"
             )
         else:
             final_text = f"❌ Verification failed. The linked wallet `{wallet_address}` does not have a Game Key NFT.\n\nGet one here: {MARKET_URL}"
