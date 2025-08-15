@@ -43,7 +43,6 @@ pending_command = {}
 # --- CUSTOM FILTER FOR CAPTCHA ANSWERS ---
 class CaptchaAnswerFilter(filters.BaseFilter):
     def filter(self, message):
-        # Only pay attention to messages from users who are in the pending_captcha dictionary
         return message.from_user.id in pending_captcha
 
 # --- HELPER FUNCTIONS ---
@@ -94,7 +93,7 @@ def get_linked_wallet(telegram_id: int) -> str | None:
         logger.error(f"Supabase GET request failed: {e}")
     return None
 
-# --- BOT COMMAND HANDLERS (MUST be async for the new library version) ---
+# --- BOT COMMAND HANDLERS (MUST be async) ---
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = (
         "🔥 Welcome to GKniftyHEADS! 🔥\n\n"
@@ -108,8 +107,8 @@ async def helpme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     help_text = (
         "Welcome! Here's how to use the bot:\n\n"
-        "1️⃣ **Start by verifying you are human.** Send any command and I'll give you a simple math problem to solve.\n\n"
-        "2️⃣ **Link your wallet.** Use `/linkEwallet YOUR_WALLET` in a **private message** with me to link your WAX wallet.\n\n"
+        "1️⃣ **Verify you are human:** Send any command to solve a quick math problem.\n\n"
+        "2️⃣ **Link your wallet:** Use `/linkEwallet YOUR_WALLET` in a **private message** with me.\n\n"
         "--- **Available Commands** ---\n"
         "• `/status` - Check your wallet's verification status.\n"
         "• `/verifyEkey` - Confirm you hold the required NFT.\n"
@@ -139,7 +138,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         has_nft = check_wax_wallet_for_nft(wallet_address)
         if has_nft:
-            final_text = "✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use `/verifyEkey` to confirm and play!"
+            final_text = "✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use `/verifyEkey` to play!"
         else:
             final_text = f"❌ Your linked wallet `{wallet_address}` does not hold a Game Key NFT.\n\nPurchase one here: {MARKET_URL}"
     await context.bot.edit_message_text(
@@ -174,12 +173,12 @@ async def link_wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if response.status_code in [200, 201, 204]:
             final_text = f"✅ Wallet `{wallet}` linked successfully!"
         else:
-            final_text = "❌ There was an error linking your wallet. Please try again later."
+            final_text = "❌ There was an error linking your wallet."
             logger.error(
                 f"Supabase POST error: {response.status_code} - {response.text}"
             )
     except httpx.RequestError as e:
-        final_text = "❌ Could not connect to the database. Please try again later."
+        final_text = "❌ Could not connect to the database."
         logger.error(f"Supabase POST request failed: {e}")
     await context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
@@ -200,11 +199,9 @@ async def unlink_wallet_command(update: Update, context: ContextTypes.DEFAULT_TY
         if response.status_code in [200, 204]:
             final_text = "✅ Your wallet has been unlinked."
         else:
-            final_text = (
-                "❌ Could not unlink your wallet. Perhaps you haven't linked one yet?"
-            )
+            final_text = "❌ Could not unlink your wallet. Perhaps you haven't linked one yet?"
     except httpx.RequestError as e:
-        final_text = "❌ Could not connect to the database. Please try again later."
+        final_text = "❌ Could not connect to the database."
         logger.error(f"Supabase DELETE request failed: {e}")
     await context.bot.edit_message_text(
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
@@ -246,9 +243,8 @@ async def emojipunks_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
     await update.message.reply_text(f"👾 Play Emoji Punks: {EMOJIPUNKS_URL}")
 
-# --- UNIVERSAL HANDLER FOR CAPTCHA AND COMMAND ROUTING ---
+# --- UNIVERSAL HANDLER ---
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles all command messages to check for captcha verification before processing."""
     if not update.message:
         return
 
@@ -259,7 +255,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if message_text.startswith("/"):
             captcha_question = generate_captcha(user_id)
             await update.message.reply_text(
-                f"Please solve the math problem before using another command!\n\n{captcha_question}"
+                f"Please solve the math problem first!\n\n{captcha_question}"
             )
             return
         try:
@@ -277,18 +273,17 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=update.message.chat_id,
                         message_id=update.message.message_id,
                     )
-                    # Create a new mock update object for the original command
                     original_update = update
                     original_update.message.text = pending_command[user_id]
                     await universal_handler(original_update, context)
                     del pending_command[user_id]
             else:
                 await update.message.reply_text(
-                    "❌ Incorrect answer. Please try sending a command again to get a new problem."
+                    "❌ Incorrect answer. Please try again."
                 )
                 del pending_captcha[user_id]
         except (ValueError, TypeError):
-            await update.message.reply_text("Please enter a valid number as your answer.")
+            await update.message.reply_text("Please enter a valid number.")
         return
 
     if user_id in verified_users:
@@ -312,7 +307,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.message.chat_id, message_id=update.message.message_id
             )
             await update.message.reply_text(
-                "I didn't understand that command. Use `/helpme` to see the available commands."
+                "I didn't understand that. Use `/helpme` for a list of commands."
             )
         return
 
@@ -323,10 +318,10 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.message.chat_id, message_id=update.message.message_id
         )
         await update.message.reply_text(
-            f"Welcome! Before you can use commands, please verify you're a human.\n\n{captcha_question}"
+            f"Welcome! Please verify you're human.\n\n{captcha_question}"
         )
 
-# --- MAIN BOT SETUP (FINAL MODERN WEBHOOK VERSION) ---
+# --- MAIN BOT SETUP (FINAL WEBHOOK VERSION) ---
 async def main():
     """Start the bot in webhook mode."""
     application = Application.builder().token(BOT_TOKEN).build()
@@ -347,7 +342,7 @@ async def main():
         MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member)
     )
 
-    logger.info("Bot is starting up in the final, correct webhook mode...")
+    logger.info("Bot is starting up...")
     
     await application.run_webhook(
         listen="0.0.0.0",
