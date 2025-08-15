@@ -249,6 +249,9 @@ async def emojipunks_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # --- UNIVERSAL HANDLER FOR CAPTCHA AND COMMAND ROUTING ---
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles all command messages to check for captcha verification before processing."""
+    if not update.message:
+        return
+
     user_id = update.effective_user.id
     message_text = update.message.text
 
@@ -274,8 +277,10 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=update.message.chat_id,
                         message_id=update.message.message_id,
                     )
-                    update.message.text = pending_command[user_id]
-                    await universal_handler(update, context)
+                    # Create a new mock update object for the original command
+                    original_update = update
+                    original_update.message.text = pending_command[user_id]
+                    await universal_handler(original_update, context)
                     del pending_command[user_id]
             else:
                 await update.message.reply_text(
@@ -321,7 +326,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Welcome! Before you can use commands, please verify you're a human.\n\n{captcha_question}"
         )
 
-# --- MAIN BOT SETUP (MODERN WEBHOOK VERSION) ---
+# --- MAIN BOT SETUP (FINAL MODERN WEBHOOK VERSION) ---
 async def main():
     """Start the bot in webhook mode."""
     application = Application.builder().token(BOT_TOKEN).build()
@@ -342,7 +347,7 @@ async def main():
         MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member)
     )
 
-    logger.info("Bot is starting up in final modern webhook mode...")
+    logger.info("Bot is starting up in the final, correct webhook mode...")
     
     await application.run_webhook(
         listen="0.0.0.0",
