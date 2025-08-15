@@ -342,22 +342,18 @@ async def main():
         MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member)
     )
 
-    logger.info("Bot is starting up in modern webhook mode...")
+    logger.info("Bot is starting up in final modern webhook mode...")
     
     webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}"
     
     await application.bot.set_webhook(url=f"{webhook_url}/{BOT_TOKEN}")
     
-    await application.start(
-        webhook_listen="0.0.0.0",
-        webhook_port=PORT,
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
         url_path=BOT_TOKEN,
+        webhook_url=webhook_url,
     )
-    
-    # This keeps the application alive by creating a task that waits indefinitely.
-    stop_event = asyncio.Event()
-    await stop_event.wait()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
