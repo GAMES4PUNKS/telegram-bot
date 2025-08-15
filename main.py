@@ -142,7 +142,7 @@ def status_command(update: Update, context: CallbackContext):
     else:
         has_nft = check_wax_wallet_for_nft(wallet_address)
         if has_nft:
-            final_text = "✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use `/verifyEkey` to confirm and play!"
+            final_text = "✅ GAME SERVER IS LIVE BABY! Your linked wallet holds a Game Key. Use `/verifyEkey` to confirm and play!"
         else:
             final_text = f"❌ Your linked wallet `{wallet_address}` does not hold a Game Key NFT.\n\nPurchase one here: {MARKET_URL}"
 
