@@ -215,8 +215,7 @@ def main():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    # This universal handler will manage all text and command messages
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, universal_handler))
+    # The CommandHandler now correctly sends ONLY commands to the universal_handler
     dp.add_handler(CommandHandler(["status", "linkEwallet", "unlinkEwallet", "verifyEkey", "snakerun", "emojipunks"], universal_handler))
     
     # This handler welcomes new members to the group
