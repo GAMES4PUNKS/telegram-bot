@@ -8,9 +8,9 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
-    Filters,
-    CallbackContext,
+    ContextTypes,
     MessageFilter,
+    filters,
 )
 from dotenv import load_dotenv
 
@@ -95,14 +95,14 @@ def get_linked_wallet(telegram_id: int) -> str | None:
     return None
 
 # --- BOT COMMAND HANDLERS (MUST be async for the new library version) ---
-async def welcome_new_member(update: Update, context: CallbackContext):
+async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = (
         "🔥 Welcome to GKniftyHEADS! 🔥\n\n"
         "To get started, send `/helpme` to see how to use the bot."
     )
     await update.message.reply_text(message)
 
-async def helpme_command(update: Update, context: CallbackContext):
+async def helpme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
@@ -120,7 +120,7 @@ async def helpme_command(update: Update, context: CallbackContext):
     )
     await update.message.reply_text(help_text)
 
-async def status_command(update: Update, context: CallbackContext):
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
@@ -146,7 +146,7 @@ async def status_command(update: Update, context: CallbackContext):
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-async def link_wallet_command(update: Update, context: CallbackContext):
+async def link_wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
@@ -185,7 +185,7 @@ async def link_wallet_command(update: Update, context: CallbackContext):
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-async def unlink_wallet_command(update: Update, context: CallbackContext):
+async def unlink_wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
@@ -210,7 +210,7 @@ async def unlink_wallet_command(update: Update, context: CallbackContext):
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-async def verify_key_command(update: Update, context: CallbackContext):
+async def verify_key_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
@@ -234,20 +234,20 @@ async def verify_key_command(update: Update, context: CallbackContext):
         chat_id=initial_message.chat_id, message_id=initial_message.message_id, text=final_text
     )
 
-async def snakerun_command(update: Update, context: CallbackContext):
+async def snakerun_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
     await update.message.reply_text(f"🐍 Play Snake Run: {SNAKERUN_URL}")
 
-async def emojipunks_command(update: Update, context: CallbackContext):
+async def emojipunks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(
         chat_id=update.message.chat_id, message_id=update.message.message_id
     )
     await update.message.reply_text(f"👾 Play Emoji Punks: {EMOJIPUNKS_URL}")
 
 # --- UNIVERSAL HANDLER FOR CAPTCHA AND COMMAND ROUTING ---
-async def universal_handler(update: Update, context: CallbackContext):
+async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles all command messages to check for captcha verification before processing."""
     user_id = update.effective_user.id
     message_text = update.message.text
@@ -335,28 +335,32 @@ async def main():
     application.add_handler(CommandHandler(command_list, universal_handler))
     application.add_handler(
         MessageHandler(
-            CaptchaAnswerFilter() & Filters.TEXT & ~Filters.COMMAND, universal_handler
+            CaptchaAnswerFilter() & filters.TEXT & ~filters.COMMAND, universal_handler
         )
     )
     application.add_handler(
-        MessageHandler(Filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member)
+        MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member)
     )
 
     logger.info("Bot is starting up in modern webhook mode...")
     
     webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}"
-
+    
     await application.bot.set_webhook(url=f"{webhook_url}/{BOT_TOKEN}")
     
-    # This runs the web server that listens for updates from Telegram
     await application.start(
         webhook_listen="0.0.0.0",
         webhook_port=PORT,
         url_path=BOT_TOKEN,
     )
     
-    # This keeps the application running
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # This is a dummy call to keep the application alive.
+    # In a real-world scenario, the web server (uvicorn) handles this.
+    # For python-telegram-bot's built-in server, we need a way to not exit.
+    # We can use a simple asyncio.Event to wait forever.
+    stop_event = asyncio.Event()
+    await stop_event.wait()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
