@@ -9,7 +9,6 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    MessageFilter,
     filters,
 )
 from dotenv import load_dotenv
@@ -42,7 +41,7 @@ verified_users = set()
 pending_command = {}
 
 # --- CUSTOM FILTER FOR CAPTCHA ANSWERS ---
-class CaptchaAnswerFilter(MessageFilter):
+class CaptchaAnswerFilter(filters.BaseFilter):
     def filter(self, message):
         # Only pay attention to messages from users who are in the pending_captcha dictionary
         return message.from_user.id in pending_captcha
@@ -343,25 +342,14 @@ async def main():
         MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member)
     )
 
-    logger.info("Bot is starting up in modern webhook mode...")
+    logger.info("Bot is starting up in final modern webhook mode...")
     
-    webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}"
-    
-    await application.bot.set_webhook(url=f"{webhook_url}/{BOT_TOKEN}")
-    
-    await application.start(
-        webhook_listen="0.0.0.0",
-        webhook_port=PORT,
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
         url_path=BOT_TOKEN,
+        webhook_url=f"https://{os.environ.get('RAILWAY_STATIC_URL')}"
     )
-    
-    # This is a dummy call to keep the application alive.
-    # In a real-world scenario, the web server (uvicorn) handles this.
-    # For python-telegram-bot's built-in server, we need a way to not exit.
-    # We can use a simple asyncio.Event to wait forever.
-    stop_event = asyncio.Event()
-    await stop_event.wait()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
