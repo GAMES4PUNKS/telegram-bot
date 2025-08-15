@@ -142,7 +142,7 @@ def status_command(update: Update, context: CallbackContext):
     else:
         has_nft = check_wax_wallet_for_nft(wallet_address)
         if has_nft:
-            final_text = "✅ GAME SERVER IS LIVE BABY! Your linked wallet holds a Game Key. Use `/verifyEkey` to confirm and play!"
+            final_text = "✅ GAME SERVER IS LIVE! Your linked wallet holds a Game Key. Use `/verifyEkey` to confirm and play!"
         else:
             final_text = f"❌ Your linked wallet `{wallet_address}` does not hold a Game Key NFT.\n\nPurchase one here: {MARKET_URL}"
 
@@ -200,7 +200,7 @@ def unlink_wallet_command(update: Update, context: CallbackContext):
         chat_id=update.effective_chat.id, text="🗑️ Unlinking your wallet..."
     )
     telegram_id = update.effective_user.id
-    url = f"{SUPABASE_URL}/rest/v1/linked_wallets?telegram_id=eq.{telegram_id}"
+    url = f"{SUPABASE_URL}/rest/v1/linked_wallet?telegram_id=eq.{telegram_id}"
     final_text = ""
 
     try:
@@ -333,10 +333,7 @@ def universal_handler(update: Update, context: CallbackContext):
         update.message.reply_text(
             f"Welcome! Before you can use commands, please verify you're a human.\n\n{captcha_question}"
         )
-    else:
-        update.message.reply_text(
-            "Please start by sending a command. Use `/helpme` to see what I can do."
-        )
+    # The final 'else' block is removed so the bot ignores non-command messages from new users.
 
 # --- MAIN BOT SETUP (WEBHOOK VERSION) ---
 def main():
