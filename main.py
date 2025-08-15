@@ -9,7 +9,6 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    MessageFilter,
     filters,
 )
 from dotenv import load_dotenv
@@ -42,8 +41,9 @@ verified_users = set()
 pending_command = {}
 
 # --- CUSTOM FILTER FOR CAPTCHA ANSWERS ---
-class CaptchaAnswerFilter(MessageFilter):
+class CaptchaAnswerFilter(filters.BaseFilter):
     def filter(self, message):
+        # Only pay attention to messages from users who are in the pending_captcha dictionary
         return message.from_user.id in pending_captcha
 
 # --- HELPER FUNCTIONS ---
@@ -354,10 +354,7 @@ async def main():
         url_path=BOT_TOKEN,
     )
     
-    # This is a dummy call to keep the application alive.
-    # In a real-world scenario, the web server (uvicorn) handles this.
-    # For python-telegram-bot's built-in server, we need a way to not exit.
-    # We can use a simple asyncio.Event to wait forever.
+    # This keeps the application alive by creating a task that waits indefinitely.
     stop_event = asyncio.Event()
     await stop_event.wait()
 
